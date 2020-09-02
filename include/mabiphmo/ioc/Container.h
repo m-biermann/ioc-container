@@ -178,11 +178,10 @@ CLANG_DISABLE_WARNING_POP
 		{
 			SetInstance<TInterface>(nullptr);
 
-			creatorMap_[typeid(TInterface)] = std::dynamic_pointer_cast<ICreatorHolder>(
-				std::make_shared<CreatorHolder<>>(
+			creatorMap_[typeid(TInterface)] = std::make_shared<CreatorHolder<>>(
 					CreateFactory<T>(
 						wrapper<std::tuple<>>(), wrapper<std::tuple<TDependencies...>>(),
-				        std::forward<TArgs>(args)...)));
+				        std::forward<TArgs>(args)...));
 		}
 
 		template <class T,
@@ -249,7 +248,7 @@ CLANG_DISABLE_WARNING_POP
 				lookupSet_.erase(typeid(T));
 				return result;
 			}
-			catch (const ContainerException&e) {
+			catch (const ContainerException&) {
 				throw;
 			}
 			catch (const std::out_of_range&){
