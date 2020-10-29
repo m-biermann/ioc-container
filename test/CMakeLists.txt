@@ -7,4 +7,4 @@ add_executable (${PROJECT_NAME}Tests container/SingletonInstanceTests.cpp contai
 target_link_libraries (${PROJECT_NAME}Tests PRIVATE ${Boost_LIBRARIES} ${PROJECT_NAME})
 target_include_directories (${PROJECT_NAME}Tests PRIVATE ${Boost_INCLUDE_DIRS})
 
-add_test (NAME iocTests COMMAND iocTests)
+add_test (NAME ${PROJECT_NAME}Tests COMMAND ${PROJECT_NAME}Tests)
