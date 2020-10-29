@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
+project(ioc-container)
 
 set(CMAKE_CXX_STANDARD 17)
+
+if(NOT DEFINED PACKAGE_NAME)
+    set(PACKAGE_NAME mabiphmo)
+endif()
 
 if(MSVC)
     add_compile_options(/W4 /WX)
@@ -10,19 +15,28 @@ endif()
 
 include(GNUInstallDirs)
 
-include_directories(include)
+if(DEFINED ENV{CMAKE_INSTALL_PREFIX})
+    set(CMAKE_INSTALL_PREFIX $ENV{CMAKE_INSTALL_PREFIX})
+endif()
 
-add_library(ioc INTERFACE)
-target_include_directories(ioc INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+if(DEFINED ENV{BOOST_ROOT})
+    set(BOOST_ROOT $ENV{BOOST_ROOT})
+endif()
+
+if(DEFINED ENV{Boost_DEBUG})
+    set(Boost_DEBUG $ENV{Boost_DEBUG})
+endif()
+
+add_library(${PROJECT_NAME} INTERFACE)
+target_include_directories(${PROJECT_NAME} INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-add_library(${PROJECT_NAME}::ioc ALIAS ioc)
-
-add_subdirectory(test)
-
-install(TARGETS ioc
-        EXPORT ${PROJECT_NAME}Targets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME}
+        EXPORT ${PACKAGE_NAME}Targets
 )
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/mabiphmo TYPE INCLUDE)
+
+enable_testing()
+
+add_subdirectory(test)
