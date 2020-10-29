@@ -1,0 +1,217 @@
+name: Build and create Artifact
+
+on:
+  workflow_dispatch:
+    inputs:
+      Build-Boost-WIN:
+        description: 'Build boost even if found in cache (Windows)'
+        required: false
+        default: 'false'
+      Build-Boost-UBU:
+        description: 'Build boost even if found in cache (Ubuntu)'
+        required: false
+        default: 'false'
+  push:
+
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+  Boost_Version_DOT: 1.74.0
+  Boost_Version: 1_74_0
+
+jobs:
+  build-boost:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: windows-latest
+            path-delimiter: \
+            script-file-type: bat
+          - os: ubuntu-latest
+            path-delimiter: /
+            script-file-type: sh
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set path vars
+      id: vars
+      shell: bash
+      run: |
+        if [ ${{matrix.os}} = "windows-latest" ]; then
+          boost_loc="${{runner.workspace}}${{ matrix.path-delimiter }}boost_out"
+          echo "boost_loc pre: $boost_loc"
+          boost_loc="C:/Boost"
+          echo "boost_loc post: $boost_loc"
+          gcc_loc="$(where gcc)"
+          gcc_loc="${gcc_loc//\\//}"
+          gxx_loc="$(where g++)"
+          gxx_loc="${gxx_loc//\\//}"
+        elif [ ${{matrix.os}} = "ubuntu-latest" ]; then
+          boost_loc="${{runner.workspace}}${{ matrix.path-delimiter }}boost_out"
+          gcc_loc="$(which gcc)"
+          gxx_loc="$(which g++)"
+        fi
+        echo "boost_loc: $boost_loc"
+        echo "::set-output name=BOOST_DIR::$boost_loc"
+        echo "gcc_loc: $gcc_loc"
+        echo "::set-output name=GCC_PATH::$gcc_loc"
+        echo "gxx_loc: $gxx_loc"
+        echo "::set-output name=GXX_PATH::$gxx_loc"
+
+    - name: Cache
+      uses: actions/cache@v2.1.1
+      id: cache
+      with:
+        key: Boost-${{ env.Boost_Version }}-${{ matrix.os }}
+        path: ${{ steps.vars.outputs.BOOST_DIR }}
+
+    - name: Boost already Installed
+      if: steps.cache.outputs.cache-hit == 'true'
+      run: echo "steps.cache.outputs.cache-hit ${{steps.cache.outputs.cache-hit}}"
+
+    - name: Create Boost build dir
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}
+      run: |
+        echo "steps.cache.outputs.cache-hit ${{steps.cache.outputs.cache-hit}}"
+        echo "matrix.os ${{matrix.os}}"
+        echo "github.event.inputs.Build-Boost-WIN ${{github.event.inputs.Build-Boost-WIN}}"
+        echo "github.event.inputs.Build-Boost-UBU ${{github.event.inputs.Build-Boost-UBU}}"
+        mkdir -p boost
+
+    - name: Download Boost
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}boost
+      shell: bash
+      run: "([ -f boost_${{ env.Boost_Version }}.tar.gz ] && echo 'Skipped [done already]') || curl -LO https://dl.bintray.com/boostorg/release/${{ env.Boost_Version_DOT }}/source/boost_${{ env.Boost_Version }}.tar.gz"
+
+    - name: Extract Boost
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}boost
+      shell: bash
+      run: "([ -d boost_${{ env.Boost_Version }} ] && echo 'Skipped [done already]') || tar xzvf boost_${{ env.Boost_Version }}.tar.gz"
+
+    - name: Bootstrap Boost
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}boost${{ matrix.path-delimiter }}boost_${{ env.Boost_Version }}
+      shell: bash
+      run: "([ -f b2 ] && echo 'Skipped [done already]') || ./bootstrap.${{ matrix.script-file-type }} --prefix=${{ steps.vars.outputs.BOOST_DIR }}"
+
+    - name: Build Boost
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}boost${{ matrix.path-delimiter }}boost_${{ env.Boost_Version }}
+      shell: bash
+      run: "([ -d stage ] && echo 'Skipped [done already]') || ./b2"
+
+    - name: Install boost
+      if: steps.cache.outputs.cache-hit != 'true' || (github.event.inputs.Build-Boost-WIN == 'true' && matrix.os == 'windows-latest') || (github.event.inputs.Build-Boost-UBU == 'true' && matrix.os == 'ubuntu-latest')
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}boost${{ matrix.path-delimiter }}boost_${{ env.Boost_Version }}
+      shell: bash
+      run: "./b2 install"
+
+  build-libs:
+    needs: build-boost
+    # The CMake configure and build commands are platform agnostic and should work equally
+    # well on Windows or Mac.  You can convert this to a matrix build if you need
+    # cross-platform coverage.
+    # See: https://docs.github.com/en/actions/configuring-and-managing-workflows/configuring-a-workflow#configuring-a-build-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: windows-latest
+            path-delimiter: \
+          - os: ubuntu-latest
+            path-delimiter: /
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Set path vars
+      id: vars
+      shell: bash
+      run: |
+        if [ ${{matrix.os}} = "windows-latest" ]; then
+          boost_loc="${{runner.workspace}}${{ matrix.path-delimiter }}boost_out"
+          echo "boost_loc pre: $boost_loc"
+          boost_loc="${boost_loc//\\//}"
+          echo "boost_loc post: $boost_loc"
+          gcc_loc="$(where gcc)"
+          gcc_loc="${gcc_loc//\\//}"
+          gxx_loc="$(where g++)"
+          gxx_loc="${gxx_loc//\\//}"
+        elif [ ${{matrix.os}} = "ubuntu-latest" ]; then
+          boost_loc="${{runner.workspace}}${{ matrix.path-delimiter }}boost_out"
+          gcc_loc="$(which gcc)"
+          gxx_loc="$(which g++)"
+        fi
+        echo "boost_loc: $boost_loc"
+        echo "::set-output name=BOOST_DIR::$boost_loc"
+        echo "gcc_loc: $gcc_loc"
+        echo "::set-output name=GCC_PATH::$gcc_loc"
+        echo "gxx_loc: $gxx_loc"
+        echo "::set-output name=GXX_PATH::$gxx_loc"
+      
+    - name: Boost Cache
+      uses: actions/cache@v2.1.1
+      id: cache
+      with:
+        key: Boost-${{ env.Boost_Version }}-${{ matrix.os }}
+        path: ${{ steps.vars.outputs.BOOST_DIR }}
+    
+    - name: Boost not found!
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: echo "steps.cache.outputs.cache-hit ${{steps.cache.outputs.cache-hit}}"; exit 1
+
+    - name: Create Build Environment
+      # Some projects don't allow in-source building, so create a separate build directory
+      # We'll use this as our working directory for all subsequent commands
+      run: mkdir -p ${{runner.workspace}}${{ matrix.path-delimiter }}build
+
+    - name: Configure CMake
+      # Use a bash shell so we can use the same syntax for environment variable
+      # access regardless of the host operating system
+      shell: bash
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}build
+      env:
+        CMAKE_INSTALL_PREFIX: ${{runner.workspace}}${{ matrix.path-delimiter }}build_output
+        BOOST_ROOT: ${{ steps.vars.outputs.BOOST_DIR }}
+        Boost_DEBUG: ON
+        CC: ${{ steps.vars.outputs.GCC_PATH }}
+        CXX: ${{ steps.vars.outputs.GXX_PATH }}
+      # Note the current convention is to use the -S and -B options here to specify source 
+      # and build directories, but this is only available with CMake 3.13 and higher.  
+      # The CMake binaries on the Github Actions machines are (as of this writing) 3.12
+      run: cmake -G "Unix Makefiles" $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -D CMAKE_C_COMPILER=${{ steps.vars.outputs.GCC_PATH }} -D CMAKE_CXX_COMPILER=${{ steps.vars.outputs.GXX_PATH }}
+
+    - name: Build
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}build
+      shell: bash
+      # Execute the build.  You can specify a specific target with "--target <NAME>"
+      run: cmake --build . --config $BUILD_TYPE --target all -- -j 2
+      
+    - name: Test
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}build
+      env:
+        BOOST_TEST_REPORT_LEVEL: detailed
+      shell: bash
+      # Execute tests defined by the CMake configuration.  
+      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+      run: ctest -C $BUILD_TYPE
+
+    - name: Install
+      working-directory: ${{runner.workspace}}${{ matrix.path-delimiter }}build
+      shell: bash
+      run: cmake --build . --config $BUILD_TYPE --target install -- -j 1
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: Libs-${{ matrix.os }}
+        path: ${{runner.workspace}}${{ matrix.path-delimiter }}build_output
