@@ -14,7 +14,7 @@
 #include <sstream>
 #include <typeindex>
 #include <set>
-#include <boost/functional/hash_fwd.hpp>
+#include <boost/functional/hash.hpp>
 #include "warnings.h"
 
 namespace mabiphmo::ioc{
@@ -38,13 +38,10 @@ namespace mabiphmo::ioc{
 	            return boost::hash_range(container.begin(), container.end());
 	        }
 	    };
-		template<class T> struct wrapper {};
-
-		std::set<std::type_index> lookupSet_;
 
 	public:
         struct ITypeHolder {
-            virtual const Scope & Scope() = 0;
+            virtual const Container::Scope & Scope() = 0;
         };
         template<class T>
         class TypeHolder : public ITypeHolder {
@@ -94,24 +91,6 @@ namespace mabiphmo::ioc{
                 }
             }
 
-            template<typename ... TArgs>
-            std::function<std::shared_ptr<T> (TArgs ...)> GetFactory() {
-                return [this](TArgs && ... args){
-                    return Get(std::forward<TArgs>(args) ...);
-                };
-            }
-
-            template<typename ... TArgs>
-            std::function<T (TArgs ...)> GetInstanceFactory() {
-                if(Scope() == Scope::Singleton) {
-                    return [this](TArgs && ... args){
-                        return *Get(std::forward<TArgs>(args) ...);
-                    };
-                }
-
-                return *GetFactoryInternal<TArgs...>();
-            }
-
             template<typename ... TFactoryArgs>
             void AddFactory(std::function<T (TFactoryArgs ...)> && factory) {
                 if(Scope() == Scope::Singleton){
@@ -145,11 +124,15 @@ namespace mabiphmo::ioc{
 	    }
 
 	    template<typename T>
-	    void RegisterType(TypeHolder<T> && holder){
-	        if(typeMap_.find(typeid(T)) == typeMap_.end())
+	    std::shared_ptr<TypeHolder<T>> RegisterType(TypeHolder<T> && holder){
+	        if(typeMap_.find(typeid(T)) != typeMap_.end())
 	            throw ContainerException("Type already registered");
 
-	        typeMap_[typeid(T)] = std::dynamic_pointer_cast<ITypeHolder>(std::make_shared<TypeHolder<T>>(holder));
+	        std::shared_ptr<TypeHolder<T>> res = std::make_shared<TypeHolder<T>>(holder);
+
+	        typeMap_[typeid(T)] = std::dynamic_pointer_cast<ITypeHolder>(res);
+
+	        return res;
 	    }
 	};
 }

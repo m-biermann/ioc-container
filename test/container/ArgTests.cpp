@@ -15,8 +15,10 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
 		mabiphmo::ioc::Container uut;
 		unsigned arg = 3;
-		uut.RegisterType(Container::TypeHolder<lvalueArgs>(Container::Scope::Singleton, lvalueArgs(arg)));
-		auto holder = uut.GetTypeHolder<lvalueArgs>();
+		auto holder = uut.RegisterType(
+			Container::TypeHolder<lvalueArgs>(
+				Container::Scope::Singleton,
+				lvalueArgs(arg)));
 		auto inst = holder->Get();
 		BOOST_TEST(inst == holder->Get());
 		BOOST_TEST(inst->a == (unsigned)3);
@@ -27,8 +29,14 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
 		mabiphmo::ioc::Container uut;
 		unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueArgs>(Container::Scope::Singleton, std::function<lvalueArgs()>([arg](){return lvalueArgs(arg);})));
-        auto holder = uut.GetTypeHolder<lvalueArgs>();
+        auto holder =
+            uut.RegisterType(
+                Container::TypeHolder<lvalueArgs>(
+                    Container::Scope::Singleton,
+                    std::function<lvalueArgs()>(
+                        [arg](){
+                        	return lvalueArgs(arg);
+                        })));
 		auto inst = holder->Get();
 		BOOST_TEST(inst == holder->Get());
 		BOOST_TEST(inst->a == (unsigned)3);
@@ -39,8 +47,13 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueArgs>(Container::Scope::Factory, std::function<lvalueArgs(unsigned)>([](unsigned val){return lvalueArgs(val);})));
-        auto holder = uut.GetTypeHolder<lvalueArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueArgs>(
+                Container::Scope::Factory,
+                std::function<lvalueArgs(unsigned)>(
+                    [](unsigned val){
+                    	return lvalueArgs(val);
+                    })));
         auto inst = holder->Get(unsigned(arg));
         BOOST_TEST(inst != holder->Get(unsigned(arg)));
         BOOST_TEST(inst->a == (unsigned)3);
@@ -51,8 +64,10 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueRefArgs>(Container::Scope::Singleton, lvalueRefArgs(arg)));
-        auto holder = uut.GetTypeHolder<lvalueRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueRefArgs>(
+                Container::Scope::Singleton,
+                lvalueRefArgs(arg)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -63,8 +78,13 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueRefArgs>(Container::Scope::Singleton, std::function<lvalueRefArgs()>([&arg](){return lvalueRefArgs(arg);})));
-        auto holder = uut.GetTypeHolder<lvalueRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueRefArgs>(
+                Container::Scope::Singleton,
+                std::function<lvalueRefArgs()>(
+                    [&arg](){
+                        return lvalueRefArgs(arg);
+                    })));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -75,10 +95,15 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueRefArgs>(Container::Scope::Factory, std::function<lvalueRefArgs(unsigned &)>([](unsigned & val){return lvalueRefArgs(val);})));
-        auto holder = uut.GetTypeHolder<lvalueArgs>();
-        auto inst = holder->Get(&arg);
-        BOOST_TEST(inst != holder->Get(&arg));
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueRefArgs>(
+                Container::Scope::Factory,
+                std::function<lvalueRefArgs(unsigned &)>(
+                    [](unsigned & val){
+                        return lvalueRefArgs(val);
+                    })));
+        auto inst = holder->Get(static_cast<unsigned&>(arg));
+        BOOST_TEST(inst != holder->Get(static_cast<unsigned&>(arg)));
         BOOST_TEST(inst->a == (unsigned)3);
         BOOST_TEST(&inst->a == &arg);
 	}
@@ -87,8 +112,10 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueConstRefArgs>(Container::Scope::Singleton, lvalueConstRefArgs(arg)));
-        auto holder = uut.GetTypeHolder<lvalueConstRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueConstRefArgs>(
+                Container::Scope::Singleton,
+                lvalueConstRefArgs(arg)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -99,8 +126,13 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueConstRefArgs>(Container::Scope::Singleton, std::function<lvalueConstRefArgs()>([arg](){return lvalueConstRefArgs(arg);})));
-        auto holder = uut.GetTypeHolder<lvalueConstRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueConstRefArgs>(
+                Container::Scope::Singleton,
+                std::function<lvalueConstRefArgs()>(
+                    [&arg](){
+                        return lvalueConstRefArgs(arg);
+                    })));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -111,8 +143,13 @@ BOOST_AUTO_TEST_SUITE(args)
 	{
         mabiphmo::ioc::Container uut;
         unsigned arg = 3;
-        uut.RegisterType(Container::TypeHolder<lvalueConstRefArgs>(Container::Scope::Factory, std::function<lvalueConstRefArgs(const unsigned &)>([](const unsigned & val){return lvalueConstRefArgs(val);})));
-        auto holder = uut.GetTypeHolder<lvalueConstRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<lvalueConstRefArgs>(
+                Container::Scope::Factory,
+                std::function<lvalueConstRefArgs(const unsigned &)>(
+                    [](const unsigned & val){
+                        return lvalueConstRefArgs(val);
+                    })));
         auto inst = holder->Get(arg);
         BOOST_TEST(inst != holder->Get(arg));
         BOOST_TEST(inst->a == (unsigned)3);
@@ -122,8 +159,10 @@ BOOST_AUTO_TEST_SUITE(args)
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonInstance)
 	{
         mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<rvalueRefArgs>(Container::Scope::Singleton, rvalueRefArgs(3)));
-        auto holder = uut.GetTypeHolder<rvalueRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<rvalueRefArgs>(
+                Container::Scope::Singleton,
+                rvalueRefArgs(3)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -132,8 +171,13 @@ BOOST_AUTO_TEST_SUITE(args)
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonFactory)
 	{
         mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<rvalueRefArgs>(Container::Scope::Singleton, std::function<rvalueRefArgs()>([](){return rvalueRefArgs(3);})));
-        auto holder = uut.GetTypeHolder<rvalueRefArgs>();
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<rvalueRefArgs>(
+                Container::Scope::Singleton,
+	            std::function<rvalueRefArgs()>(
+                    [](){
+                        return rvalueRefArgs(3);
+                    })));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
         BOOST_TEST(inst->a == (unsigned)3);
@@ -142,10 +186,15 @@ BOOST_AUTO_TEST_SUITE(args)
 	BOOST_AUTO_TEST_CASE(rvalueReferenceClassFactory)
 	{
         mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<rvalueRefArgs>(Container::Scope::Factory, std::function<rvalueRefArgs(unsigned &&)>([](unsigned && val){return rvalueRefArgs(std::move(val));})));
-        auto holder = uut.GetTypeHolder<rvalueRefArgs>();
-        auto inst = holder->Get(3);
-        BOOST_TEST(inst != holder->Get(3));
+        auto holder = uut.RegisterType(
+            Container::TypeHolder<rvalueRefArgs>(
+                Container::Scope::Factory,
+                std::function<rvalueRefArgs(unsigned &&)>(
+                    [](unsigned && val){
+                        return rvalueRefArgs(std::move(val));
+                    })));
+        auto inst = holder->Get((unsigned)3);
+        BOOST_TEST(inst != holder->Get((unsigned)3));
         BOOST_TEST(inst->a == (unsigned)3);
 	}
 

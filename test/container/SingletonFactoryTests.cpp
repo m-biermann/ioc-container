@@ -23,17 +23,32 @@ BOOST_AUTO_TEST_SUITE(singleton_factory)
 
 	BOOST_AUTO_TEST_CASE(registerWithDependencyAndGet)
 	{
-		mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([uut](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
-        uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
-        auto aHolder = uut.GetTypeHolder<A>();
-        auto bHolder = uut.GetTypeHolder<B>();
-		std::shared_ptr<B> bInst = bHolder->Get();
-		std::shared_ptr<A> aInst = aHolder->Get();
-		BOOST_TEST(bInst->b == (unsigned)5);
-		BOOST_TEST(bInst == bHolder->Get());
-		BOOST_TEST(bInst->a->a == (unsigned)3);
-		BOOST_TEST(bInst->a == aInst);
+		try{
+			mabiphmo::ioc::Container uut;
+			auto bHolder = uut.RegisterType(
+					Container::TypeHolder<B>(
+							Container::Scope::Singleton,
+							std::function<B()>(
+									[&uut = std::as_const(uut)](){
+										return B(uut.GetTypeHolder<A>()->Get(), 5);
+									})));
+			auto aHolder = uut.RegisterType(
+					Container::TypeHolder<A>(
+							Container::Scope::Singleton,
+							std::function<A()>(
+									[](){
+										return A(3);
+									})));
+			std::shared_ptr<B> bInst = bHolder->Get();
+			std::shared_ptr<A> aInst = aHolder->Get();
+			BOOST_TEST(bInst->b == (unsigned)5);
+			BOOST_TEST(bInst == bHolder->Get());
+			BOOST_TEST(bInst->a->a == (unsigned)3);
+			BOOST_TEST(bInst->a == aInst);
+		}
+		catch (const std::out_of_range& oor) {
+			std::cerr << "Out of Range error: " << oor.what() << '\n';
+		}
 	}
 
 	BOOST_AUTO_TEST_CASE(registerOnInterfaceAndGet)
@@ -49,9 +64,9 @@ BOOST_AUTO_TEST_SUITE(singleton_factory)
 	BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 	{
 		mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Singleton, std::function<D()>([uut](){return D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), 2);})));
+        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Singleton, std::function<D()>([&uut = std::as_const(uut)](){return D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), 2);})));
         uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Singleton, std::function<CImpl()>([](){return CImpl(10);})));
-        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([uut](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
+        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([&uut = std::as_const(uut)](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
         uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
         auto aHolder = uut.GetTypeHolder<A>();
         auto bHolder = uut.GetTypeHolder<B>();

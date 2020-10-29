@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 	{
 		mabiphmo::ioc::Container uut;
 		uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
-		uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Factory, std::function<B(unsigned)>([uut](unsigned val){return B(uut.GetTypeHolder<A>()->Get(), val);})));
+		uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Factory, std::function<B(unsigned)>([&uut = std::as_const(uut)](unsigned val){return B(uut.GetTypeHolder<A>()->Get(), val);})));
 		auto bHolder = uut.GetTypeHolder<B>();
         std::shared_ptr<B> bInst5 = bHolder->Get((unsigned)5);
         std::shared_ptr<B> bInst6 = bHolder->Get((unsigned)6);
@@ -63,8 +63,8 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 		mabiphmo::ioc::Container uut;
         uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Factory, std::function<CImpl()>([](){return CImpl(10);})));
         uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
-        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([uut](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
-        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Factory, std::function<D(unsigned)>([uut](unsigned val){return D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), val);})));
+        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([&uut = std::as_const(uut)](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
+        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Factory, std::function<D(unsigned)>([&uut = std::as_const(uut)](unsigned val){return D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), val);})));
 
         auto aHolder = uut.GetTypeHolder<A>();
         auto bHolder = uut.GetTypeHolder<B>();
@@ -83,8 +83,8 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 		BOOST_TEST(dInst3->d == (unsigned)3);
 		BOOST_TEST(dInst2 != dHolder->Get((unsigned)2));
 		BOOST_TEST(dInst3 != dHolder->Get((unsigned)3));
-		BOOST_TEST(dInst2->c == cInst);
-		BOOST_TEST(dInst3->c == cInst);
+		BOOST_TEST(dInst2->c != cInst);
+		BOOST_TEST(dInst3->c != cInst);
 		BOOST_TEST(cInst->C() == (unsigned)10);
 		BOOST_TEST(dInst2->b == bInst);
 		BOOST_TEST(dInst3->b == bInst);
