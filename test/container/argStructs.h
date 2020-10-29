@@ -25,7 +25,7 @@ struct lvalueArgs{
 };
 
 struct rvalueRefArgs{
-	rvalueRefArgs(unsigned &&a_) : a(std::move(a_)) {}
+	rvalueRefArgs(unsigned &&a_) : a(a_) {}
 	unsigned a;
 };
 

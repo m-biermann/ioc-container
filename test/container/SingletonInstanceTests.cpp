@@ -7,50 +7,48 @@
 #include <boost/test/unit_test.hpp>
 #include "structs.h"
 
+using namespace mabiphmo::ioc;
+
 BOOST_AUTO_TEST_SUITE(container)
 BOOST_AUTO_TEST_SUITE(singleton_instance)
 
 BOOST_AUTO_TEST_CASE(registerAndGet)
 {
-	mabiphmo::ioc::Container uut;
-	uut.RegisterSingletonClass<A>(3);
-	std::shared_ptr<A> aInst = uut.GetInstance<A>();
-	BOOST_TEST(aInst->a == 3);
-	BOOST_TEST(aInst == uut.GetInstance<A>());
+	Container uut;
+	uut.RegisterType<A>(Container::TypeHolder<A>(Container::Scope::Singleton, A(3)));
+	std::shared_ptr<A> aInst = uut.GetTypeHolder<A>()->Get();
+	BOOST_TEST(aInst->a == (unsigned)3);
+	BOOST_TEST(aInst == uut.GetTypeHolder<A>()->Get());
 }
 
 BOOST_AUTO_TEST_CASE(registerWithDependencyAndGet)
 {
-	mabiphmo::ioc::Container uut;
-	uut.RegisterSingletonClass<A>(3);
-	uut.RegisterSingletonClass<B, A>(5);
-	std::shared_ptr<B> bInst = uut.GetInstance<B>();
-	BOOST_TEST(bInst->b == 5);
-	BOOST_TEST(bInst->a->a == 3);
-	BOOST_TEST(uut.GetInstance<A>() == uut.GetInstance<B>()->a);
-}
-
-BOOST_AUTO_TEST_CASE(registerOnInterfaceAndGet)
-{
-	mabiphmo::ioc::Container uut;
-	uut.RegisterSingletonClassOnInterface<IC, CImpl>(10);
-	BOOST_TEST(uut.GetInstance<IC>()->C() == 10);
+	Container uut;
+    uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, A(3)));
+    uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, B(uut.GetTypeHolder<A>()->Get(), 5)));
+	std::shared_ptr<B> bInst = uut.GetTypeHolder<B>()->Get();
+	BOOST_TEST(bInst->b == (unsigned)5);
+	BOOST_TEST(bInst->a->a == (unsigned)3);
+	BOOST_TEST(uut.GetTypeHolder<A>()->Get() == bInst->a);
 }
 
 BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 {
-	mabiphmo::ioc::Container uut;
-	uut.RegisterSingletonClassOnInterface<IC, CImpl>(10);
-	uut.RegisterSingletonClass<A>(3);
-	uut.RegisterSingletonClass<B, A>(5);
-	std::shared_ptr<B> bInst = uut.GetInstance<B>();
-	std::shared_ptr<D> dInst = uut.RegisterSingletonClass<D, B, IC>(2);
-	BOOST_TEST(dInst->sum == 20);
-	BOOST_TEST(dInst->d == 2);
-	BOOST_TEST(dInst == uut.GetInstance<D>());
-	BOOST_TEST(dInst->c == uut.GetInstance<IC>());
-	BOOST_TEST(dInst->b == uut.GetInstance<B>());
-	BOOST_TEST(dInst->b->a == uut.GetInstance<A>());
+	Container uut;
+	uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Singleton, CImpl(10)));
+	uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, A(3)));
+	uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, B(uut.GetTypeHolder<A>()->Get(), 5)));
+	uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Singleton, D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), 2)));
+
+	std::shared_ptr<B> bInst = uut.GetTypeHolder<B>()->Get();
+	std::shared_ptr<D> dInst = uut.GetTypeHolder<D>()->Get();
+
+	BOOST_TEST(dInst->sum == (unsigned)20);
+	BOOST_TEST(dInst->d == (unsigned)2);
+	BOOST_TEST(dInst == uut.GetTypeHolder<D>()->Get());
+	BOOST_TEST(dInst->c == std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()));
+	BOOST_TEST(dInst->b == uut.GetTypeHolder<B>()->Get());
+	BOOST_TEST(dInst->b->a == uut.GetTypeHolder<A>()->Get());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
