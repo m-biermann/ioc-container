@@ -28,9 +28,9 @@ jobs:
           - os: windows-latest
             path-delimiter: \
             script-file-type: bat
-          - os: ubuntu-latest
-            path-delimiter: /
-            script-file-type: sh
+          #- os: ubuntu-latest
+          #  path-delimiter: /
+          #  script-file-type: sh
     runs-on: ${{ matrix.os }}
 
     steps:
