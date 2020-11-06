@@ -14,7 +14,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 	BOOST_AUTO_TEST_CASE(registerAndGet)
 	{
 		Container uut;
-		uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Factory, std::function<A(unsigned)>([](unsigned val){return A(val);})));
+		uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Factory, std::function<std::shared_ptr<A>(unsigned)>([](unsigned val){return std::make_shared<A>(val);})));
 		std::shared_ptr<Container::TypeHolder<A>> aHolder = uut.GetTypeHolder<A>();
 		std::shared_ptr<A> aInst3 = aHolder->Get((unsigned)3);
 		std::shared_ptr<A> aInst2 = aHolder->Get((unsigned)2);
@@ -28,8 +28,8 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 	BOOST_AUTO_TEST_CASE(registerWithDependencyAndGet)
 	{
 		mabiphmo::ioc::Container uut;
-		uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
-		uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Factory, std::function<B(unsigned)>([&uut = std::as_const(uut)](unsigned val){return B(uut.GetTypeHolder<A>()->Get(), val);})));
+		uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<std::shared_ptr<A>()>([](){return std::make_shared<A>(3);})));
+		uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Factory, std::function<std::shared_ptr<B>(unsigned)>([&uut = std::as_const(uut)](unsigned val){return std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), val);})));
 		auto bHolder = uut.GetTypeHolder<B>();
         std::shared_ptr<B> bInst5 = bHolder->Get((unsigned)5);
         std::shared_ptr<B> bInst6 = bHolder->Get((unsigned)6);
@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 	BOOST_AUTO_TEST_CASE(registerOnInterfaceAndGet)
 	{
 		mabiphmo::ioc::Container uut;
-		uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Factory, std::function<CImpl(unsigned)>([](unsigned val){return CImpl(val);})));
+		uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Factory, std::function<std::shared_ptr<CImpl>(unsigned)>([](unsigned val){return std::make_shared<CImpl>(val);})));
 		auto cHolder = uut.GetTypeHolder<CImpl>();
 		auto cInst5 = std::dynamic_pointer_cast<IC>(cHolder->Get((unsigned)5));
 		auto cInst6 = std::dynamic_pointer_cast<IC>(cHolder->Get((unsigned)6));
@@ -61,10 +61,10 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 	BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 	{
 		mabiphmo::ioc::Container uut;
-        uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Factory, std::function<CImpl()>([](){return CImpl(10);})));
-        uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<A()>([](){return A(3);})));
-        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<B()>([&uut = std::as_const(uut)](){return B(uut.GetTypeHolder<A>()->Get(), 5);})));
-        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Factory, std::function<D(unsigned)>([&uut = std::as_const(uut)](unsigned val){return D(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), val);})));
+        uut.RegisterType(Container::TypeHolder<CImpl>(Container::Scope::Factory, std::function<std::shared_ptr<CImpl>()>([](){return std::make_shared<CImpl>(10);})));
+        uut.RegisterType(Container::TypeHolder<A>(Container::Scope::Singleton, std::function<std::shared_ptr<A>()>([](){return std::make_shared<A>(3);})));
+        uut.RegisterType(Container::TypeHolder<B>(Container::Scope::Singleton, std::function<std::shared_ptr<B>()>([&uut = std::as_const(uut)](){return std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), 5);})));
+        uut.RegisterType(Container::TypeHolder<D>(Container::Scope::Factory, std::function<std::shared_ptr<D>(unsigned)>([&uut = std::as_const(uut)](unsigned val){return std::make_shared<D>(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), val);})));
 
         auto aHolder = uut.GetTypeHolder<A>();
         auto bHolder = uut.GetTypeHolder<B>();

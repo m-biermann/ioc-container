@@ -56,59 +56,51 @@ namespace mabiphmo::ioc{
                 (key.emplace_back(typeid(Ts)), ...);
                 return key;
             }
-
-            template<typename ... TArgs>
-            std::shared_ptr<std::function<T (TArgs ...)>> GetFactoryInternal() {
-                if(Scope() == Scope::Singleton && (std::is_same<TArgs, TArgs>::value || ...)){
-                    throw ContainerException("Singletons can only have parameterless factories");
-                }
-
-                std::shared_ptr<void> typeErasedFactory = factories_.at(CreateKey<TArgs ...>());
-                return std::static_pointer_cast<std::function<T (TArgs ...)>>(typeErasedFactory);
-            }
         public:
-            explicit TypeHolder(Container::Scope && scope) : instance_(nullptr), scope_(scope) {}
+            explicit TypeHolder(Container::Scope && scope) : instance_(nullptr), scope_(std::move(scope)) {}
 
-            TypeHolder(Container::Scope && scope, T && instance) : TypeHolder(std::move(scope)) {
-                SetInstance(std::move(instance));
+            TypeHolder(Container::Scope && scope, std::shared_ptr<T> instance) : TypeHolder(std::move(scope)) {
+                SetInstance(instance);
             }
 
             template<class ... TFactoryArgs>
-            TypeHolder(Container::Scope && scope, std::function<T (TFactoryArgs ...)> && factory) : TypeHolder(std::move(scope)) {
-                AddFactory(std::move(factory));
+            TypeHolder(Container::Scope && scope, std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) : TypeHolder(std::move(scope)) {
+	            SetFactory(std::move(factory));
             }
 
             template<typename ... TArgs>
             std::shared_ptr<T> Get(TArgs && ... args) {
                 if(Scope() == Scope::Singleton) {
                     if(instance_ == nullptr) {
-                        SetInstance((*GetFactoryInternal<>())());
+                        SetInstance((*(GetFactory<TArgs ...>()))(std::forward<TArgs>(args) ...));
                     }
                     return instance_;
                 }
                 else {
-                    return std::make_shared<T>((*GetFactoryInternal<TArgs ...>())(std::forward<TArgs>(args) ...));
+                    return (*(GetFactory<TArgs ...>()))(std::forward<TArgs>(args) ...);
                 }
             }
+
+	        template<typename ... TArgs>
+	        std::shared_ptr<std::function<std::shared_ptr<T> (TArgs ...)>> GetFactory() {
+		        std::shared_ptr<void> typeErasedFactory = factories_.at(CreateKey<TArgs ...>());
+		        return std::static_pointer_cast<std::function<std::shared_ptr<T> (TArgs ...)>>(typeErasedFactory);
+	        }
 
             template<typename ... TFactoryArgs>
-            void AddFactory(std::function<T (TFactoryArgs ...)> && factory) {
-                if(Scope() == Scope::Singleton){
-                    if((std::is_same<TFactoryArgs, TFactoryArgs>::value || ...)){
-                        throw ContainerException("Singletons can only have parameterless factories");
-                    }
+            void SetFactory(std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) {
+            	if(instance_ != nullptr)
+            		throw ContainerException("Can't change factories of singletons after instance is set");
 
-                }
-
-                factories_[CreateKey<TFactoryArgs ...>()] = std::make_shared<std::function<T (TFactoryArgs ...)>>(factory);
+                factories_[CreateKey<TFactoryArgs ...>()] = std::make_shared<std::function<std::shared_ptr<T> (TFactoryArgs ...)>>(std::move(factory));
             }
 
-            void SetInstance(T && instance) {
+            void SetInstance(std::shared_ptr<T> instance) {
                 if(Scope() != Scope::Singleton){
                     throw ContainerException("Only singletons can only have managed instances");
                 }
 
-                instance_ = std::make_shared<T>(instance);
+                instance_ = instance;
             }
 
             const Container::Scope & Scope() override {
