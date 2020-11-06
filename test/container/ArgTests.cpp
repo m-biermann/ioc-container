@@ -6,7 +6,7 @@
 #include <mabiphmo/ioc-container/Container.h>
 #include "argStructs.h"
 
-using namespace mabiphmo::ioc;
+using namespace mabiphmo::ioc_container;
 
 BOOST_AUTO_TEST_SUITE(container)
 BOOST_AUTO_TEST_SUITE(args)

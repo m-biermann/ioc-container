@@ -7,7 +7,7 @@
 #include <boost/test/unit_test.hpp>
 #include "structs.h"
 
-using namespace mabiphmo::ioc;
+using namespace mabiphmo::ioc_container;
 
 BOOST_AUTO_TEST_SUITE(container)
 BOOST_AUTO_TEST_SUITE(singleton_instance)

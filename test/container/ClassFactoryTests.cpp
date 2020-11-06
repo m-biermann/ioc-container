@@ -6,7 +6,7 @@
 #include <boost/test/unit_test.hpp>
 #include "structs.h"
 
-using namespace mabiphmo::ioc;
+using namespace mabiphmo::ioc_container;
 
 BOOST_AUTO_TEST_SUITE(container)
 BOOST_AUTO_TEST_SUITE(class_factory)
@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 
 	BOOST_AUTO_TEST_CASE(registerWithDependencyAndGet)
 	{
-		mabiphmo::ioc::Container uut;
+		mabiphmo::ioc_container::Container uut;
 		uut.RegisterType(TypeHolder<A>(Scope::Singleton, std::function<std::shared_ptr<A>()>([](){return std::make_shared<A>(3);})));
 		uut.RegisterType(TypeHolder<B>(Scope::Factory, std::function<std::shared_ptr<B>(unsigned)>([&uut = std::as_const(uut)](unsigned val){return std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), val);})));
 		auto bHolder = uut.GetTypeHolder<B>();
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 
 	BOOST_AUTO_TEST_CASE(registerOnInterfaceAndGet)
 	{
-		mabiphmo::ioc::Container uut;
+		mabiphmo::ioc_container::Container uut;
 		uut.RegisterType(TypeHolder<CImpl>(Scope::Factory, std::function<std::shared_ptr<CImpl>(unsigned)>([](unsigned val){return std::make_shared<CImpl>(val);})));
 		auto cHolder = uut.GetTypeHolder<CImpl>();
 		auto cInst5 = std::dynamic_pointer_cast<IC>(cHolder->Get((unsigned)5));
@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_SUITE(class_factory)
 
 	BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 	{
-		mabiphmo::ioc::Container uut;
+		mabiphmo::ioc_container::Container uut;
         uut.RegisterType(TypeHolder<CImpl>(Scope::Factory, std::function<std::shared_ptr<CImpl>()>([](){return std::make_shared<CImpl>(10);})));
         uut.RegisterType(TypeHolder<A>(Scope::Singleton, std::function<std::shared_ptr<A>()>([](){return std::make_shared<A>(3);})));
         uut.RegisterType(TypeHolder<B>(Scope::Singleton, std::function<std::shared_ptr<B>()>([&uut = std::as_const(uut)](){return std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), 5);})));

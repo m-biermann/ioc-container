@@ -17,7 +17,7 @@
 #include <boost/functional/hash.hpp>
 #include "warnings.h"
 
-namespace mabiphmo::ioc{
+namespace mabiphmo::ioc_container{
 	class ContainerException : public std::runtime_error
 	{
 	public:
@@ -30,7 +30,7 @@ namespace mabiphmo::ioc{
 	};
 
 	struct ITypeHolder {
-		virtual const ioc::Scope & Scope() = 0;
+		virtual const ioc_container::Scope & Scope() = 0;
 	};
 	template<class T>
 	class TypeHolder : public ITypeHolder {
@@ -42,7 +42,7 @@ namespace mabiphmo::ioc{
 		};
 
 		std::shared_ptr<T> instance_;
-		ioc::Scope scope_;
+		ioc_container::Scope scope_;
 		std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>> factories_ =
 		std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>();
 
@@ -53,14 +53,14 @@ namespace mabiphmo::ioc{
 			return key;
 		}
 	public:
-		explicit TypeHolder(ioc::Scope && scope) : instance_(nullptr), scope_(std::move(scope)) {}
+		explicit TypeHolder(ioc_container::Scope && scope) : instance_(nullptr), scope_(std::move(scope)) {}
 
-		TypeHolder(ioc::Scope && scope, std::shared_ptr<T> instance) : TypeHolder(std::move(scope)) {
+		TypeHolder(ioc_container::Scope && scope, std::shared_ptr<T> instance) : TypeHolder(std::move(scope)) {
 			SetInstance(instance);
 		}
 
 		template<class ... TFactoryArgs>
-		TypeHolder(ioc::Scope && scope, std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) : TypeHolder(std::move(scope)) {
+		TypeHolder(ioc_container::Scope && scope, std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) : TypeHolder(std::move(scope)) {
 			SetFactory(std::move(factory));
 		}
 
@@ -99,7 +99,7 @@ namespace mabiphmo::ioc{
 			instance_ = instance;
 		}
 
-		const ioc::Scope & Scope() override {
+		const ioc_container::Scope & Scope() override {
 			return scope_;
 		}
 	};
