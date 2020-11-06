@@ -3,7 +3,7 @@
 //
 
 #include <boost/test/unit_test.hpp>
-#include <mabiphmo/ioc/Container.h>
+#include <mabiphmo/ioc-container/Container.h>
 #include "argStructs.h"
 
 using namespace mabiphmo::ioc;
@@ -13,11 +13,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueSingletonInstance)
 	{
-		mabiphmo::ioc::Container uut;
+		Container uut;
 		unsigned arg = 3;
 		auto holder = uut.RegisterType(
-			Container::TypeHolder<lvalueArgs>(
-				Container::Scope::Singleton,
+			TypeHolder<lvalueArgs>(
+				Scope::Singleton,
 				std::make_shared<lvalueArgs>(arg)));
 		auto inst = holder->Get();
 		BOOST_TEST(inst == holder->Get());
@@ -27,12 +27,12 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueSingletonFactory)
 	{
-		mabiphmo::ioc::Container uut;
+		Container uut;
 		unsigned arg = 3;
         auto holder =
             uut.RegisterType(
-                Container::TypeHolder<lvalueArgs>(
-                    Container::Scope::Singleton,
+                TypeHolder<lvalueArgs>(
+                    Scope::Singleton,
                     std::function<std::shared_ptr<lvalueArgs>()>(
                         [arg](){
                         	return std::make_shared<lvalueArgs>(arg);
@@ -45,11 +45,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueClassFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueArgs>(
-                Container::Scope::Factory,
+            TypeHolder<lvalueArgs>(
+                Scope::Factory,
                 std::function<std::shared_ptr<lvalueArgs>(unsigned)>(
                     [](unsigned val){
                     	return std::make_shared<lvalueArgs>(val);
@@ -62,11 +62,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceSingletonInstance)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<lvalueRefArgs>(
+                Scope::Singleton,
 				std::make_shared<lvalueRefArgs>(arg)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
@@ -76,11 +76,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceSingletonFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<lvalueRefArgs>(
+                Scope::Singleton,
                 std::function<std::shared_ptr<lvalueRefArgs>()>(
                     [&arg](){
                         return std::make_shared<lvalueRefArgs>(arg);
@@ -93,11 +93,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceClassFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueRefArgs>(
-                Container::Scope::Factory,
+            TypeHolder<lvalueRefArgs>(
+                Scope::Factory,
                 std::function<std::shared_ptr<lvalueRefArgs>(unsigned &)>(
                     [](unsigned & val){
                         return std::make_shared<lvalueRefArgs>(val);
@@ -110,11 +110,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceSingletonInstance)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueConstRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<lvalueConstRefArgs>(
+                Scope::Singleton,
 				std::make_shared<lvalueConstRefArgs>(arg)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
@@ -124,11 +124,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceSingletonFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueConstRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<lvalueConstRefArgs>(
+                Scope::Singleton,
                 std::function<std::shared_ptr<lvalueConstRefArgs>()>(
                     [&arg](){
                         return std::make_shared<lvalueConstRefArgs>(arg);
@@ -141,11 +141,11 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceClassFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         unsigned arg = 3;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<lvalueConstRefArgs>(
-                Container::Scope::Factory,
+            TypeHolder<lvalueConstRefArgs>(
+                Scope::Factory,
                 std::function<std::shared_ptr<lvalueConstRefArgs>(const unsigned &)>(
                     [](const unsigned & val){
                         return std::make_shared<lvalueConstRefArgs>(val);
@@ -158,10 +158,10 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonInstance)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<rvalueRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<rvalueRefArgs>(
+                Scope::Singleton,
 				std::make_shared<rvalueRefArgs>(3)));
         auto inst = holder->Get();
         BOOST_TEST(inst == holder->Get());
@@ -170,10 +170,10 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<rvalueRefArgs>(
-                Container::Scope::Singleton,
+            TypeHolder<rvalueRefArgs>(
+                Scope::Singleton,
 	            std::function<std::shared_ptr<rvalueRefArgs>()>(
                     [](){
                         return std::make_shared<rvalueRefArgs>(3);
@@ -185,10 +185,10 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceClassFactory)
 	{
-        mabiphmo::ioc::Container uut;
+        Container uut;
         auto holder = uut.RegisterType(
-            Container::TypeHolder<rvalueRefArgs>(
-                Container::Scope::Factory,
+            TypeHolder<rvalueRefArgs>(
+                Scope::Factory,
                 std::function<std::shared_ptr<rvalueRefArgs>(unsigned &&)>(
                     [](unsigned && val){
                         return std::make_shared<rvalueRefArgs>(std::move(val));
