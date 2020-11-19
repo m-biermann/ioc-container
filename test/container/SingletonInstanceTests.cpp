@@ -35,10 +35,10 @@ BOOST_AUTO_TEST_CASE(registerWithDependencyAndGet)
 BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 {
 	Container uut;
-	uut.RegisterType(TypeHolder<CImpl>(Scope::Singleton, std::make_shared<CImpl>(10)));
-	uut.RegisterType(TypeHolder<A>(Scope::Singleton, std::make_shared<A>(3)));
-	uut.RegisterType(TypeHolder<B>(Scope::Singleton, std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), 5)));
-	uut.RegisterType(TypeHolder<D>(Scope::Singleton, std::make_shared<D>(uut.GetTypeHolder<B>()->Get(), std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()), 2)));
+	uut.RegisterType(TypeHolder(Scope::Singleton, std::dynamic_pointer_cast<IC>(std::make_shared<CImpl>(10))));
+	uut.RegisterType(TypeHolder(Scope::Singleton, std::make_shared<A>(3)));
+	uut.RegisterType(TypeHolder(Scope::Singleton, std::make_shared<B>(uut.GetTypeHolder<A>()->Get(), 5)));
+	uut.RegisterType(TypeHolder(Scope::Singleton, std::make_shared<D>(uut.GetTypeHolder<B>()->Get(), uut.GetTypeHolder<IC>()->Get(), 2)));
 
 	std::shared_ptr<B> bInst = uut.GetTypeHolder<B>()->Get();
 	std::shared_ptr<D> dInst = uut.GetTypeHolder<D>()->Get();
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(registerWithDependencyInjectionAndGet)
 	BOOST_TEST(dInst->sum == (unsigned)20);
 	BOOST_TEST(dInst->d == (unsigned)2);
 	BOOST_TEST(dInst == uut.GetTypeHolder<D>()->Get());
-	BOOST_TEST(dInst->c == std::dynamic_pointer_cast<IC>(uut.GetTypeHolder<CImpl>()->Get()));
+	BOOST_TEST(dInst->c == uut.GetTypeHolder<IC>()->Get());
 	BOOST_TEST(dInst->b == uut.GetTypeHolder<B>()->Get());
 	BOOST_TEST(dInst->b->a == uut.GetTypeHolder<A>()->Get());
 }
