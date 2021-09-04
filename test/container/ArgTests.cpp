@@ -13,189 +13,206 @@ BOOST_AUTO_TEST_SUITE(args)
 
 	BOOST_AUTO_TEST_CASE(lvalueSingletonInstance)
 	{
-		Container uut;
+		auto uut = std::make_shared<Container>();
 		unsigned arg = 3;
-		auto holder = uut.RegisterType(
-			TypeHolder<lvalueArgs>(
-				Scope::Singleton,
-				std::make_shared<lvalueArgs>(arg)));
-		auto inst = holder->Get();
-		BOOST_TEST(inst == holder->Get());
+		uut->RegisterSingleton(std::make_shared<lvalueArgs>(arg));
+		auto inst = uut->Get<lvalueArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a != &arg);
+	}
+
+	BOOST_AUTO_TEST_CASE(lvalueSingletonFactoryPredefined)
+	{
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton<lvalueArgs>(std::function<std::shared_ptr<lvalueArgs>()>(
+				[arg](){
+					return std::make_shared<lvalueArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueArgs>());
 		BOOST_TEST(inst->a == (unsigned)3);
 		BOOST_TEST(&inst->a != &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueSingletonFactory)
 	{
-		Container uut;
+		auto uut = std::make_shared<Container>();
 		unsigned arg = 3;
-        auto holder =
-            uut.RegisterType(
-                TypeHolder<lvalueArgs>(
-                    Scope::Singleton,
-                    std::function<std::shared_ptr<lvalueArgs>()>(
-                        [arg](){
-                        	return std::make_shared<lvalueArgs>(arg);
-                        })));
-		auto inst = holder->Get();
-		BOOST_TEST(inst == holder->Get());
+		uut->RegisterSingleton<lvalueArgs>(std::function<std::shared_ptr<lvalueArgs>(unsigned)>(
+				[](unsigned arg){
+					return std::make_shared<lvalueArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueArgs>(arg);
+		BOOST_TEST(inst == uut->Get<lvalueArgs>(3));
 		BOOST_TEST(inst->a == (unsigned)3);
 		BOOST_TEST(&inst->a != &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueClassFactory)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueArgs>(
-                Scope::Factory,
-                std::function<std::shared_ptr<lvalueArgs>(unsigned)>(
-                    [](unsigned val){
-                    	return std::make_shared<lvalueArgs>(val);
-                    })));
-        auto inst = holder->Get(unsigned(arg));
-        BOOST_TEST(inst != holder->Get(unsigned(arg)));
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a != &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterFactory<lvalueArgs>(std::function<std::shared_ptr<lvalueArgs>(unsigned)>(
+				[](unsigned arg){
+					return std::make_shared<lvalueArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueArgs>((unsigned)arg);
+		BOOST_TEST(inst != uut->Get<lvalueArgs>((unsigned)3));
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a != &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceSingletonInstance)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueRefArgs>(
-                Scope::Singleton,
-				std::make_shared<lvalueRefArgs>(arg)));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton(std::make_shared<lvalueRefArgs>(arg));
+		auto inst = uut->Get<lvalueRefArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
+	}
+
+	BOOST_AUTO_TEST_CASE(lvalueReferenceSingletonFactoryPredefined)
+	{
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton<lvalueRefArgs>(std::function<std::shared_ptr<lvalueRefArgs>()>(
+				[&arg](){
+					return std::make_shared<lvalueRefArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueRefArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceSingletonFactory)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueRefArgs>(
-                Scope::Singleton,
-                std::function<std::shared_ptr<lvalueRefArgs>()>(
-                    [&arg](){
-                        return std::make_shared<lvalueRefArgs>(arg);
-                    })));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton<lvalueRefArgs>(std::function<std::shared_ptr<lvalueRefArgs>(unsigned &)>(
+				[](unsigned &val){
+					return std::make_shared<lvalueRefArgs>(val);
+				}));
+		auto inst = uut->Get<lvalueRefArgs>(reinterpret_cast<unsigned&>(arg));
+		BOOST_TEST(inst == uut->Get<lvalueRefArgs>(reinterpret_cast<unsigned&>(arg)));
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueReferenceClassFactory)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueRefArgs>(
-                Scope::Factory,
-                std::function<std::shared_ptr<lvalueRefArgs>(unsigned &)>(
-                    [](unsigned & val){
-                        return std::make_shared<lvalueRefArgs>(val);
-                    })));
-        auto inst = holder->Get(static_cast<unsigned&>(arg));
-        BOOST_TEST(inst != holder->Get(static_cast<unsigned&>(arg)));
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterFactory<lvalueRefArgs>(std::function<std::shared_ptr<lvalueRefArgs>(unsigned &)>(
+				[](unsigned &arg){
+					return std::make_shared<lvalueRefArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueRefArgs>(reinterpret_cast<unsigned&>(arg));
+		BOOST_TEST(inst != uut->Get<lvalueRefArgs>(reinterpret_cast<unsigned&>(arg)));
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceSingletonInstance)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueConstRefArgs>(
-                Scope::Singleton,
-				std::make_shared<lvalueConstRefArgs>(arg)));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton(std::make_shared<lvalueConstRefArgs>(arg));
+		auto inst = uut->Get<lvalueConstRefArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueConstRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
+	}
+
+	BOOST_AUTO_TEST_CASE(lvalueConstReferenceSingletonFactoryPredefined)
+	{
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton<lvalueConstRefArgs>(std::function<std::shared_ptr<lvalueConstRefArgs>()>(
+				[&arg](){
+					return std::make_shared<lvalueConstRefArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueConstRefArgs>();
+		BOOST_TEST(inst == uut->Get<lvalueConstRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceSingletonFactory)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueConstRefArgs>(
-                Scope::Singleton,
-                std::function<std::shared_ptr<lvalueConstRefArgs>()>(
-                    [&arg](){
-                        return std::make_shared<lvalueConstRefArgs>(arg);
-                    })));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterSingleton<lvalueConstRefArgs>(std::function<std::shared_ptr<lvalueConstRefArgs>(const unsigned &)>(
+				[](const unsigned &arg){
+					return std::make_shared<lvalueConstRefArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueConstRefArgs>(arg);
+		BOOST_TEST(inst == uut->Get<lvalueConstRefArgs>(arg));
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(lvalueConstReferenceClassFactory)
 	{
-        Container uut;
-        unsigned arg = 3;
-        auto holder = uut.RegisterType(
-            TypeHolder<lvalueConstRefArgs>(
-                Scope::Factory,
-                std::function<std::shared_ptr<lvalueConstRefArgs>(const unsigned &)>(
-                    [](const unsigned & val){
-                        return std::make_shared<lvalueConstRefArgs>(val);
-                    })));
-        auto inst = holder->Get(arg);
-        BOOST_TEST(inst != holder->Get(arg));
-        BOOST_TEST(inst->a == (unsigned)3);
-        BOOST_TEST(&inst->a == &arg);
+		auto uut = std::make_shared<Container>();
+		unsigned arg = 3;
+		uut->RegisterFactory<lvalueConstRefArgs>(std::function<std::shared_ptr<lvalueConstRefArgs>(const unsigned &)>(
+				[](const unsigned &arg){
+					return std::make_shared<lvalueConstRefArgs>(arg);
+				}));
+		auto inst = uut->Get<lvalueConstRefArgs>(arg);
+		BOOST_TEST(inst != uut->Get<lvalueConstRefArgs>(arg));
+		BOOST_TEST(inst->a == (unsigned)3);
+		BOOST_TEST(&inst->a == &arg);
 	}
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonInstance)
 	{
-        Container uut;
-        auto holder = uut.RegisterType(
-            TypeHolder<rvalueRefArgs>(
-                Scope::Singleton,
-				std::make_shared<rvalueRefArgs>(3)));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
+		auto uut = std::make_shared<Container>();
+		uut->RegisterSingleton(std::make_shared<rvalueRefArgs>(3));
+		auto inst = uut->Get<rvalueRefArgs>();
+		BOOST_TEST(inst == uut->Get<rvalueRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
+	}
+
+	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonFactoryPredefined)
+	{
+		auto uut = std::make_shared<Container>();
+		uut->RegisterSingleton<rvalueRefArgs>(std::function<std::shared_ptr<rvalueRefArgs>()>(
+				[](){
+					return std::make_shared<rvalueRefArgs>(3);
+				}));
+		auto inst = uut->Get<rvalueRefArgs>();
+		BOOST_TEST(inst == uut->Get<rvalueRefArgs>());
+		BOOST_TEST(inst->a == (unsigned)3);
 	}
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceSingletonFactory)
 	{
-        Container uut;
-        auto holder = uut.RegisterType(
-            TypeHolder<rvalueRefArgs>(
-                Scope::Singleton,
-	            std::function<std::shared_ptr<rvalueRefArgs>()>(
-                    [](){
-                        return std::make_shared<rvalueRefArgs>(3);
-                    })));
-        auto inst = holder->Get();
-        BOOST_TEST(inst == holder->Get());
-        BOOST_TEST(inst->a == (unsigned)3);
+		auto uut = std::make_shared<Container>();
+		uut->RegisterSingleton<rvalueRefArgs>(std::function<std::shared_ptr<rvalueRefArgs>(unsigned&&)>(
+				[](unsigned &&arg){
+					return std::make_shared<rvalueRefArgs>(std::move(arg));
+				}));
+		auto inst = uut->Get<rvalueRefArgs>((unsigned)3);
+		BOOST_TEST(inst == uut->Get<rvalueRefArgs>((unsigned)3));
+		BOOST_TEST(inst->a == (unsigned)3);
 	}
 
 	BOOST_AUTO_TEST_CASE(rvalueReferenceClassFactory)
 	{
-        Container uut;
-        auto holder = uut.RegisterType(
-            TypeHolder<rvalueRefArgs>(
-                Scope::Factory,
-                std::function<std::shared_ptr<rvalueRefArgs>(unsigned &&)>(
-                    [](unsigned && val){
-                        return std::make_shared<rvalueRefArgs>(std::move(val));
-                    })));
-        auto inst = holder->Get((unsigned)3);
-        BOOST_TEST(inst != holder->Get((unsigned)3));
-        BOOST_TEST(inst->a == (unsigned)3);
+		auto uut = std::make_shared<Container>();
+		uut->RegisterFactory<rvalueRefArgs>(std::function<std::shared_ptr<rvalueRefArgs>(unsigned&&)>(
+				[](unsigned &&arg){
+					return std::make_shared<rvalueRefArgs>(std::move(arg));
+				}));
+		auto inst = uut->Get<rvalueRefArgs>((unsigned)3);
+		BOOST_TEST(inst != uut->Get<rvalueRefArgs>((unsigned)3));
+		BOOST_TEST(inst->a == (unsigned)3);
 	}
 
 BOOST_AUTO_TEST_SUITE_END()

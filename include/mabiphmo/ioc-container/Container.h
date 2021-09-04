@@ -18,112 +18,233 @@
 #include "warnings.h"
 
 namespace mabiphmo::ioc_container{
-	class ContainerException : public std::runtime_error
+    /// Custom exception thrown by the container
+	struct ContainerException : public std::runtime_error
 	{
-	public:
-		explicit ContainerException(std::string &&description) : std::runtime_error(description) {}
+        /// Constructor
+        /// \param description The description of the error
+		explicit ContainerException( const std::string &description) : std::runtime_error(description) {}
 	};
 
+    /// Scopes of types in the container
 	enum class Scope{
+		/// Only a single instance should exist while running
 		Singleton,
-		Factory
+		/// Each time an instance is asked for, a new one will be created
+		Factory,
+		/// There will (cannot) be any instances of this, however instances of linked types will be resolved
+        Interface
 	};
 
-	struct ITypeHolder {
-		virtual const ioc_container::Scope & Scope() = 0;
-	};
-	template<class T>
-	class TypeHolder : public ITypeHolder {
-		template<typename TContainer>
-		struct container_hash {
-			std::size_t operator()(const TContainer &container) const{
-				return boost::hash_range(container.begin(), container.end());
-			}
-		};
-
-		std::shared_ptr<T> instance_;
-		ioc_container::Scope scope_;
-		std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>> factories_ =
-		std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>();
-
-		template<typename ... Ts>
-		static std::vector<std::type_index> CreateKey() {
-			std::vector<std::type_index> key = std::vector<std::type_index>();
-			(key.emplace_back(typeid(Ts)), ...);
-			return key;
-		}
-	public:
-		explicit TypeHolder(ioc_container::Scope && scope) : instance_(nullptr), scope_(std::move(scope)) {}
-
-		TypeHolder(ioc_container::Scope && scope, std::shared_ptr<T> instance) : TypeHolder(std::move(scope)) {
-			SetInstance(instance);
-		}
-
-		template<class ... TFactoryArgs>
-		TypeHolder(ioc_container::Scope && scope, std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) : TypeHolder(std::move(scope)) {
-			SetFactory(std::move(factory));
-		}
-
-		template<typename ... TArgs>
-		std::shared_ptr<T> Get(TArgs && ... args) {
-			if(Scope() == Scope::Singleton) {
-				if(instance_ == nullptr) {
-					SetInstance((*(GetFactory<TArgs ...>()))(std::forward<TArgs>(args) ...));
-				}
-				return instance_;
-			}
-			else {
-				return (*(GetFactory<TArgs ...>()))(std::forward<TArgs>(args) ...);
-			}
-		}
-
-		template<typename ... TArgs>
-		std::shared_ptr<std::function<std::shared_ptr<T> (TArgs ...)>> GetFactory() {
-			std::shared_ptr<void> typeErasedFactory = factories_.at(CreateKey<TArgs ...>());
-			return std::static_pointer_cast<std::function<std::shared_ptr<T> (TArgs ...)>>(typeErasedFactory);
-		}
-
-		template<typename ... TFactoryArgs>
-		void SetFactory(std::function<std::shared_ptr<T> (TFactoryArgs ...)> && factory) {
-			if(instance_ != nullptr)
-				throw ContainerException("Can't change factories of singletons after instance is set");
-
-			factories_[CreateKey<TFactoryArgs ...>()] = std::make_shared<std::function<std::shared_ptr<T> (TFactoryArgs ...)>>(std::move(factory));
-		}
-
-		void SetInstance(std::shared_ptr<T> instance) {
-			if(Scope() != Scope::Singleton){
-				throw ContainerException("Only singletons can only have managed instances");
-			}
-
-			instance_ = instance;
-		}
-
-		const ioc_container::Scope & Scope() override {
-			return scope_;
-		}
-	};
-
+    /// \brief IoC Container that stores Singleton- Instances and Factories for both Singletons and non- Singletons
+    /// \details When factories are registered, dependencies will be resolved by using the arguments of the factory.
+    /// All dependencies that should be resolved have to be of type std::shared_ptr<Dependency> and have to come before all other arguments to the factory.
+    /// Also all dependencies cannot have any args or have to be a already-resolved singleton.
 	class Container : public std::enable_shared_from_this<Container>
 	{
-        std::unordered_map<std::type_index, std::shared_ptr<ITypeHolder>> typeMap_ = std::unordered_map<std::type_index, std::shared_ptr<ITypeHolder>>();
+//region Helper Stuff
+//region Structs
+        template<typename TContainer>
+        struct container_hash {
+            std::size_t operator()(const TContainer &container) const{
+                return boost::hash_range(container.begin(), container.end());
+            }
+        };
+
+		template<typename TContainer, typename TKey>
+		bool container_contains(const TContainer& container, const TKey& key)
+		{
+			return container.find(key) != container.end();
+		}
+//endregion
+//region Functions
+		template <class T, typename ... TDependencies, typename... TArgs>
+		void AddFactory(std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)> && pFactory)
+		{
+			if (container_contains(registeredInstances_, typeid(T))) throw ContainerException("An instance is already registered");
+			if (container_contains(registeredFactories_, typeid(T)) && container_contains(registeredFactories_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}))
+				throw ContainerException("A factory with the same arguments is already registered");
+
+			auto new_factory = std::make_shared<std::function<std::shared_ptr<T>(TArgs ...)>>(
+				[self = shared_from_this(), factory = std::make_shared<std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)>>(pFactory)](TArgs &&... args) {
+					return (*factory)(self->Resolve<TDependencies>() ..., std::forward<TArgs>(args) ...);
+				});
+
+			//add the factory
+			registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}] = new_factory;
+		}
+
+		template<class T, class TInterface, typename... TArgs>
+		void AddLink(TArgs &&... args) {
+			auto typeLinks = registeredLinks_[typeid(T)];
+			typeLinks.insert(typeLinks.end(), std::make_shared<std::function<std::shared_ptr<TInterface>()>>(
+				[self = shared_from_this(), forwardedArgs = std::tuple<TArgs ...>(std::forward<TArgs>(args) ...)](){
+					return std::apply(
+						[self](auto&&...lambdaArgs){
+							return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(lambdaArgs)...));
+						},
+						forwardedArgs);
+				}));
+		}
+//endregion
+//endregion
+        std::unordered_map<std::type_index, Scope> registeredTypes_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
+        std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
+        std::unordered_map<std::type_index, std::vector<std::shared_ptr<void>>> registeredLinks_;
+
 	public:
-	    template<typename T>
-	    std::shared_ptr<TypeHolder<T>> GetTypeHolder() const{
-	        return std::dynamic_pointer_cast<TypeHolder<T>>(typeMap_.at(typeid(T)));
-	    }
+        /// Default constructor
+        Container() = default;
 
-	    template<typename T>
-	    std::shared_ptr<TypeHolder<T>> RegisterType(TypeHolder<T> && holder){
-	        if(typeMap_.find(typeid(T)) != typeMap_.end())
-	            throw ContainerException("Type already registered");
+        /// \brief Registers a type as defined in T::Register
+        /// \details The T::Register function should be like <b><tt>void Register(std::shared_ptr<Container> &)</tt></b>
+        /// \tparam T Type to register
+        template <class T>
+        void Register()
+        {
+            T::Register(shared_from_this());
+        }
+//region Resolving
+		template <class T>
+		std::vector<std::shared_ptr<T>> ResolveAll()
+		{
+			if(!container_contains(registeredTypes_, typeid(T))) throw ContainerException("Type is not registered");
+			if(registeredTypes_[typeid(T)] != Scope::Interface) throw ContainerException("Type is not registered as an Interface");
+			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()) throw ContainerException("No Links are registered for this Interface");
 
-	        std::shared_ptr<TypeHolder<T>> res = std::make_shared<TypeHolder<T>>(holder);
+			auto res = std::vector<std::shared_ptr<T>>();
+			for (auto link : registeredLinks_[typeid(T)])
+			{
+				res.insert(res.end(), (*std::static_pointer_cast<std::function<std::shared_ptr<T>()>>(link))());
+			}
+			return res;
+		}
 
-	        typeMap_[typeid(T)] = std::dynamic_pointer_cast<ITypeHolder>(res);
+		template <class T, typename ... TArgs>
+		std::shared_ptr<T> Resolve(TArgs &&... args)
+		{
+			if constexpr(std::is_same<T, Container>::value)
+				return shared_from_this();
+			else{
+				if(!container_contains(registeredTypes_, typeid(T))) throw ContainerException("Type is not registered");
 
-	        return res;
-	    }
+				switch(registeredTypes_[typeid(T)]){
+					case Scope::Singleton:
+						if(container_contains(registeredInstances_, typeid(T))) return std::static_pointer_cast<T>(registeredInstances_[typeid(T)]);
+						if(!container_contains(registeredFactories_, typeid(T))) throw ContainerException("Type has neither an instance nor a factory");
+						if(!container_contains(registeredFactories_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...})) throw ContainerException("Type has no factory with the supplied arguments");
+						registeredInstances_[typeid(T)] = (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
+						return std::static_pointer_cast<T>(registeredInstances_[typeid(T)]);
+					case Scope::Factory:
+						if(!container_contains(registeredFactories_, typeid(T))) throw ContainerException("Type has neither an instance nor a factory");
+						if(!container_contains(registeredFactories_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...})) throw ContainerException("Type has no factory with the supplied arguments");
+						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
+					case Scope::Interface:
+						if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()) throw ContainerException("No Links are registered for this Interface");
+						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>()>>(*registeredLinks_[typeid(T)].begin()))();
+					default:
+						throw ContainerException("The type is registered with an invalid Scope");
+				}
+			}
+		}
+
+		template <class T, typename ... TArgs>
+		std::shared_ptr<T> Get(TArgs &&... args)
+		{
+			return Resolve<T>(std::forward<TArgs>(args) ...);
+		}
+//endregion
+//region Singleton
+		/// Registers a type as Singleton with the predefined instance
+		/// \tparam T Type to register
+		/// \param pInstance Predefined Instance
+		template <class T>
+		void RegisterSingleton(std::shared_ptr<T> pInstance)
+		{
+			//check whether the type is registered
+			if (!container_contains(registeredTypes_, typeid(T))) {
+				//mark the type as registered as singleton
+				registeredTypes_[typeid(T)] = Scope::Singleton;
+				//add the instance
+				registeredInstances_[typeid(T)] = pInstance;
+				return;
+			}
+
+			//assertions for a registered type
+			if (registeredTypes_[typeid(T)] != Scope::Singleton) throw ContainerException("Already registered as non- Singleton");
+			if (container_contains(registeredInstances_, typeid(T))) throw ContainerException("An instance is already registered");
+
+			//add the instance
+			registeredInstances_[typeid(T)] = pInstance;
+		}
+
+		/// Registers a type as Singleton with a factory
+		/// \tparam T Type to register
+		/// \tparam TArgs Arguments the factory takes (dependencies will be resolved according to these args)
+		/// \param pFactory Factory method
+		template <class T, typename ... TDependencies, typename... TArgs>
+		void RegisterSingleton(std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)> && pFactory)
+		{
+			//check whether the type is registered
+			if (!container_contains(registeredTypes_, typeid(T))) {
+				//mark the type as registered as singleton
+				registeredTypes_[typeid(T)] = Scope::Singleton;
+				//add the factory
+				AddFactory<T>(std::forward<std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)>>(pFactory));
+				return;
+			}
+
+			//assertions for a registered type
+			if (registeredTypes_[typeid(T)] != Scope::Singleton) throw ContainerException("Already registered as non- Singleton");
+
+			//add the factory
+			AddFactory<T>(std::forward<std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)>>(pFactory));
+		}
+//endregion
+//region Factory
+		/// Registers a type as non- Singleton with a factory
+		/// \tparam T Type to register
+		/// \tparam TArgs Arguments the factory takes (dependencies will be resolved according to these args)
+		/// \param pFactory Factory method
+		template <class T, typename ... TDependencies, typename... TArgs>
+		void RegisterFactory(std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)> && pFactory)
+		{
+			//check whether the type is registered
+			if (!container_contains(registeredTypes_, typeid(T))){
+				//mark the type as registered as factory
+				registeredTypes_[typeid(T)] = Scope::Factory;
+				//add the factory
+				AddFactory<T>(std::forward<std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)>>(pFactory));
+				return;
+			}
+
+			//assertions for a registered type
+			if (registeredTypes_[typeid(T)] != Scope::Factory) throw ContainerException("Already registered as non- Factory");
+
+			//add the factory
+			AddFactory<T>(std::forward<std::function<std::shared_ptr<T>(std::shared_ptr<TDependencies> ..., TArgs ...)>>(pFactory));
+		}
+//endregion
+//region Interface
+		template <class TInterface, class T, typename ... TArgs> void RegisterOnInterface(TArgs &&... args)
+		{
+			//check whether the type is registered
+			if (!container_contains(registeredTypes_, typeid(T))){
+				//mark the type as registered as factory
+				registeredTypes_[typeid(T)] = Scope::Interface;
+				//add the link
+				AddLink<T, TInterface>(std::forward<TArgs>(args) ...);
+				return;
+			}
+
+			//assertions for a registered type
+			if (registeredTypes_[typeid(T)] != Scope::Interface) throw ContainerException("Already registered as non- Interface");
+
+			//add the link
+			AddLink<T, TInterface>(std::forward<TArgs>(args) ...);
+		}
+//endregion
 	};
 }
 
