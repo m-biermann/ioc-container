@@ -62,39 +62,38 @@ namespace mabiphmo::ioc_container{
 		template <typename... Ts>
 		struct list {};
 
-		template <typename T>
-		struct is_shared_ptr : std::false_type {};
-
-		template <typename T>
-		struct is_shared_ptr<std::shared_ptr<T>> : std::true_type {};
-
 		template <typename L, typename T, typename F, typename = void>
 		struct partition;
 
-		template <typename Next, typename... Ls, typename T, typename... Fs>
-		struct partition<list<Next, Ls...>, T, list<Fs...>, std::enable_if_t<!is_shared_ptr<Next>::value>> :
-				partition<list<Ls...>, T, list<Fs..., Next>>
+		template <typename Head, typename... Tail, typename MultipleDependencyList, typename DependencyList>
+		struct partition<list<Head, Tail...>, MultipleDependencyList, DependencyList, list<>> :
+				partition<list<>, MultipleDependencyList, DependencyList, list<Head, Tail...>>
 		{};
 
-		template <typename Next, typename... Ls, typename... Ts, typename F>
-		struct partition<list<std::shared_ptr<Next>, Ls...>, list<Ts...>, F> :
-				partition<list<Ls...>, list<Ts..., std::shared_ptr<Next>>, F>
+		template <typename Head, typename... Tail, typename... Ts, typename MultipleDependencyList>
+		struct partition<list<std::shared_ptr<Head>, Tail...>, MultipleDependencyList, list<Ts...>, list<>> :
+				partition<list<Tail...>, MultipleDependencyList, list<Ts..., Head>, list<>>
 		{};
 
-		template <typename T, typename F>
-		struct partition<list<>, T, F> { using type = list<T, F>; };
+		template <typename Head, typename... Tail, typename... Ts>
+		struct partition<list<std::vector<std::shared_ptr<Head>>, Tail...>, list<Ts...>, list<>, list<>> :
+				partition<list<Tail...>, list<Ts..., Head>, list<>, list<>>
+		{};
+
+		template <typename MultipleDependencyList, typename DependencyList, typename ArgsList>
+		struct partition<list<>, MultipleDependencyList, DependencyList, ArgsList> { using type = list<MultipleDependencyList, DependencyList, ArgsList>; };
 
 		template <typename... Ts>
-		using register_traits = typename partition<list<Ts...>, list<>, list<>>::type;
+		using register_traits = typename partition<list<Ts...>, list<>, list<>, list<>>::type;
 
-		template <typename T, typename F, typename... TDependencies, typename... TArgs>
-		void AddFactoryImpl(list<list<std::shared_ptr<TDependencies>...>, list<TArgs...>>, F && pFactory)
+		template <typename T, typename F, typename... TMultipleDependencies, typename... TDependencies, typename... TArgs>
+		void AddFactoryImpl(list<list<TMultipleDependencies...>, list<TDependencies...>, list<TArgs...>>, F && pFactory)
 		{
 			if (container_contains(registeredInstances_, typeid(T))) throw ContainerException("An instance is already registered");
 
 			auto new_factory = std::make_shared<std::function<std::shared_ptr<T>(TArgs ...)>>(
 					[self = shared_from_this(), factory = std::make_shared<F>(pFactory)](TArgs &&... args) {
-						return (*factory)(self->Resolve<TDependencies>() ..., std::forward<TArgs>(args) ...);
+						return (*factory)(self->ResolveAll<TMultipleDependencies>() ..., self->Resolve<TDependencies>() ..., std::forward<TArgs>(args) ...);
 					});
 
 			//add the factory
