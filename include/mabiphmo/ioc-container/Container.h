@@ -111,17 +111,19 @@ namespace mabiphmo::ioc_container{
 
 		template<class T, class TInterface, typename... TArgs>
 		void AddLink() {
-			registeredLinks_[typeid(TInterface)].insert(registeredLinks_[typeid(TInterface)].end(), std::make_shared<std::function<std::shared_ptr<TInterface>(TArgs &&...)>>(
+			if (container_contains(registeredLinks_, typeid(T)) && container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}))
+				throw ContainerException("A link with the same arguments is already registered");
+			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}] = std::make_shared<std::function<std::shared_ptr<TInterface>(TArgs &&...)>>(
 				[self = shared_from_this()](TArgs &&... args){
 					return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(args)...));
-				}));
+				});
 		}
 //endregion
 //endregion
         std::unordered_map<std::type_index, Scope> registeredTypes_;
         std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
         std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
-        std::unordered_map<std::type_index, std::vector<std::shared_ptr<void>>> registeredLinks_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
 
 	public:
         /// Default constructor
@@ -172,7 +174,8 @@ namespace mabiphmo::ioc_container{
 						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
 					case Scope::Interface:
 						if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()) throw ContainerException("No Links are registered for this Interface");
-						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(*registeredLinks_[typeid(T)].begin()))(std::forward<TArgs>(args) ...);
+						if(!container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...})) throw ContainerException("The Interface has no link with the supplied arguments");
+						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
 					default:
 						throw ContainerException("The type is registered with an invalid Scope");
 				}
