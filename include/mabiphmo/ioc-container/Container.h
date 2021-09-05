@@ -91,8 +91,6 @@ namespace mabiphmo::ioc_container{
 		void AddFactoryImpl(list<list<std::shared_ptr<TDependencies>...>, list<TArgs...>>, F && pFactory)
 		{
 			if (container_contains(registeredInstances_, typeid(T))) throw ContainerException("An instance is already registered");
-			if (container_contains(registeredFactories_, typeid(T)) && container_contains(registeredFactories_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}))
-				throw ContainerException("A factory with the same arguments is already registered");
 
 			auto new_factory = std::make_shared<std::function<std::shared_ptr<T>(TArgs ...)>>(
 					[self = shared_from_this(), factory = std::make_shared<F>(pFactory)](TArgs &&... args) {
@@ -111,19 +109,17 @@ namespace mabiphmo::ioc_container{
 
 		template<class T, class TInterface, typename... TArgs>
 		void AddLink() {
-			if (container_contains(registeredLinks_, typeid(T)) && container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}))
-				throw ContainerException("A link with the same arguments is already registered");
-			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}] = std::make_shared<std::function<std::shared_ptr<TInterface>(TArgs &&...)>>(
+			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TArgs &&...)>>(
 				[self = shared_from_this()](TArgs &&... args){
 					return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(args)...));
-				});
+				}));
 		}
 //endregion
 //endregion
         std::unordered_map<std::type_index, Scope> registeredTypes_;
         std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
         std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
-        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::vector<std::shared_ptr<void>>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
 
 	public:
         /// Default constructor
@@ -146,7 +142,7 @@ namespace mabiphmo::ioc_container{
 			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()) throw ContainerException("No Links are registered for this Interface");
 
 			auto res = std::vector<std::shared_ptr<T>>();
-			for (auto link : registeredLinks_[typeid(T)])
+			for (auto link : registeredLinks_[typeid(T)][std::vector<std::type_index>()])
 			{
 				res.insert(res.end(), (*std::static_pointer_cast<std::function<std::shared_ptr<T>()>>(link))());
 			}
@@ -175,7 +171,7 @@ namespace mabiphmo::ioc_container{
 					case Scope::Interface:
 						if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()) throw ContainerException("No Links are registered for this Interface");
 						if(!container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...})) throw ContainerException("The Interface has no link with the supplied arguments");
-						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
+						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(*registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}].begin()))(std::forward<TArgs>(args) ...);
 					default:
 						throw ContainerException("The type is registered with an invalid Scope");
 				}
