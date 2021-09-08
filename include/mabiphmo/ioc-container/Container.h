@@ -82,7 +82,7 @@ namespace mabiphmo::ioc_container{
 		{};
 
 		template <typename MultipleDependencyList, typename DependencyList, typename ArgsList>
-		struct partition<list<>, MultipleDependencyList, DependencyList, ArgsList> { using type = list<MultipleDependencyList, DependencyList, ArgsList>; };
+		struct partition<list<>, MultipleDependencyList, DependencyList, ArgsList> { using type [[maybe_unused]] = list<MultipleDependencyList, DependencyList, ArgsList>; };
 
 		template <typename... Ts>
 		using register_traits = typename partition<list<Ts...>, list<>, list<>, list<>>::type;
@@ -128,21 +128,65 @@ namespace mabiphmo::ioc_container{
 		/// \tparam T The type to link to
 		/// \tparam TInterface The Interface to link
 		/// \tparam TArgs Arguments that should be supplied when resolving
-		template<class T, class TInterface, typename... TArgs>
-		void AddLink() {
-			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TArgs) ...}].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TArgs &&...)>>(
-				[self_weak = weak_from_this()](TArgs &&... args){
-					if(auto self = self_weak.lock())
-						return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(args)...));
-					throw ContainerException("Container is expired");
-				}));
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLink(std::string interfaceId, TArgs &&... args) { // NOLINT(performance-unnecessary-value-param)
+			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][interfaceId].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][interfaceId].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TRemainingArgs &&...)>>(
+					[self_weak = weak_from_this(), args = std::tuple<TArgs ...>(std::forward<TArgs>(args) ...)](TRemainingArgs &&... remainingArgs){
+						return std::apply(
+								[self_weak](TArgs &&...args, TRemainingArgs &&...remainingArgs)
+								{
+									if (auto self = self_weak.lock())
+										return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(args) ..., std::forward<TRemainingArgs>(remainingArgs)...));
+									throw ContainerException("Container is expired");
+								}, std::tuple_cat(args, std::tuple<TRemainingArgs ...>(std::forward<TRemainingArgs>(remainingArgs) ...)));
+					}));
 		}
+
+//region AddLink aliases
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLink(TArgs &&... args) {
+			return AddLink<TInterface, T, TRemainingArgs ...>("", std::forward<TArgs>(args) ...);
+		}
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLink(const char *id, TArgs &&... args) {
+			return AddLink<TInterface, T, TRemainingArgs ...>(std::string(id), std::forward<TArgs>(args) ...);
+		}
+//endregion
+		template <class T, typename ... TArgs>
+		std::shared_ptr<T> ResolveInterface(std::string interfaceId, TArgs &&... args){ // NOLINT(performance-unnecessary-value-param)
+			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no associated, linked types";
+				throw ContainerException(ss.str());
+			}
+			if(!container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}) || registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}].empty()){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied arguments";
+				throw ContainerException(ss.str());
+			}
+			if(!container_contains(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}], interfaceId)){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied id";
+				throw ContainerException(ss.str());
+			}
+			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][interfaceId].front()))(std::forward<TArgs>(args) ...);
+		}
+//region ResolveInterface Aliases
+		template <class T, typename ... TArgs>
+		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
+			return ResolveInterface<T>("", std::forward<TArgs>(args) ...);
+		}
+		template <class T, typename ... TArgs>
+		std::shared_ptr<T> ResolveInterface(const char *id, TArgs &&... args){
+			return ResolveInterface<T>(std::string(id), std::forward<TArgs>(args) ...);
+		}
+//endregion
 //endregion
 //endregion
         std::unordered_map<std::type_index, Scope> registeredTypes_;
         std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
         std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
-        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::vector<std::shared_ptr<void>>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::unordered_map<std::string, std::vector<std::shared_ptr<void>>>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
 
 	public:
         /// Default constructor
@@ -180,9 +224,10 @@ namespace mabiphmo::ioc_container{
 			}
 
 			auto res = std::vector<std::shared_ptr<T>>();
-			for (auto link : registeredLinks_[typeid(T)][std::vector<std::type_index>()])
+			for (const auto& id_vector : registeredLinks_[typeid(T)][std::vector<std::type_index>()])
 			{
-				res.insert(res.end(), (*std::static_pointer_cast<std::function<std::shared_ptr<T>()>>(link))());
+				for(auto link : id_vector.second)
+					res.insert(res.end(), (*std::static_pointer_cast<std::function<std::shared_ptr<T>()>>(link))());
 			}
 			return res;
 		}
@@ -232,17 +277,7 @@ namespace mabiphmo::ioc_container{
 						}
 						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
 					case Scope::Interface:
-						if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()){
-							auto ss = std::ostringstream();
-							ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no associated, linked types";
-							throw ContainerException(ss.str());
-						}
-						if(!container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...})){
-							auto ss = std::ostringstream();
-							ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied arguments";
-							throw ContainerException(ss.str());
-						}
-						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(*registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}].begin()))(std::forward<TArgs>(args) ...);
+						return ResolveInterface<T>(std::forward<TArgs>(args) ...);
 					default:{
 						auto ss = std::ostringstream();
 						ss << "Type " << boost::typeindex::type_id<T>().pretty_name() << " is registered with an invalid Scope";
@@ -348,9 +383,9 @@ namespace mabiphmo::ioc_container{
 //endregion
 //region Interface
 		/// Registers TInterface to be resolvable by resolving via T
-		/// \tparam TArgs The arguments that can be supplied when resolving TInterface
-		template <class TInterface, class T, typename ... TArgs>
-		void RegisterOnInterface()
+		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void RegisterOnInterface(TArgs &&... args)
 		{
 			static_assert(std::is_base_of<TInterface, T>::value, "T should be derived from the interface");
 
@@ -359,7 +394,7 @@ namespace mabiphmo::ioc_container{
 				//mark the type as registered as factory
 				registeredTypes_[typeid(TInterface)] = Scope::Interface;
 				//add the link
-				AddLink<T, TInterface, TArgs ...>();
+				AddLink<TInterface, T, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
 				return;
 			}
 
@@ -371,7 +406,7 @@ namespace mabiphmo::ioc_container{
 			}
 
 			//add the link
-			AddLink<T, TInterface, TArgs ...>();
+			AddLink<TInterface, T, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
 		}
 //endregion
 	};

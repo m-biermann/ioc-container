@@ -3,7 +3,7 @@
 
 find_package(Boost REQUIRED COMPONENTS unit_test_framework)
 
-add_executable (${PROJECT_NAME}Tests container/ArgTests.cpp container/argStructs.h container/structs.h container/SingletonInstanceTests.cpp container/SingletonFactoryTests.cpp container/ClassFactoryTests.cpp)
+add_executable (${PROJECT_NAME}Tests container/ArgTests.cpp container/argStructs.h container/structs.h container/DependencyTests.cpp container/ScopeTests.cpp)
 target_link_libraries (${PROJECT_NAME}Tests PRIVATE ${Boost_LIBRARIES} ${PROJECT_NAME})
 target_include_directories (${PROJECT_NAME}Tests PRIVATE ${Boost_INCLUDE_DIRS})
 

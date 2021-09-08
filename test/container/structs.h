@@ -32,6 +32,15 @@ private:
 	unsigned c;
 };
 
+struct CImpl2 : public IC{
+	explicit CImpl2(unsigned &c_) : IC(), c(c_) {}
+	unsigned C() override
+	{
+		return c;
+	}
+	unsigned &c;
+};
+
 struct D{
 	std::shared_ptr<B> b;
 	std::shared_ptr<IC> c;
