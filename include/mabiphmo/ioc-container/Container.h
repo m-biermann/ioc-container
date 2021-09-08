@@ -27,6 +27,17 @@ namespace mabiphmo::ioc_container{
 		explicit ContainerException( const std::string &description) : std::runtime_error(description) {}
 	};
 
+	template<unsigned N>
+	struct FixedString {
+		char buf[N + 1]{};
+		constexpr FixedString(char const* s) {
+			for (unsigned i = 0; i != N; ++i) buf[i] = s[i];
+		}
+		constexpr operator char const*() const { return buf; }
+		operator std::string() const { return buf; }
+	};
+	template<unsigned N> FixedString(char const (&)[N]) -> FixedString<N - 1>;
+
     /// \brief IoC Container that stores Singleton- Instances and Factories for both Singletons and non- Singletons
     /// \details When factories are registered, dependencies will be resolved by using the arguments of the factory.
     /// All dependencies that should be resolved have to be of type std::shared_ptr<Dependency> and have to come before all other arguments to the factory.
@@ -143,6 +154,11 @@ namespace mabiphmo::ioc_container{
 		}
 
 //region AddLink aliases
+		template <class TInterface, class T, FixedString id, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLink(TArgs &&... args) {
+			return AddLink<TInterface, T, TRemainingArgs ...>(id, std::forward<TArgs>(args) ...);
+		}
+
 		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
 		void AddLink(TArgs &&... args) {
 			return AddLink<TInterface, T, TRemainingArgs ...>("", std::forward<TArgs>(args) ...);
@@ -172,6 +188,10 @@ namespace mabiphmo::ioc_container{
 			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][interfaceId].front()))(std::forward<TArgs>(args) ...);
 		}
 //region ResolveInterface Aliases
+		template <class T, FixedString id, typename ... TArgs>
+		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
+			return ResolveInterface<T>(id, std::forward<TArgs>(args) ...);
+		}
 		template <class T, typename ... TArgs>
 		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
 			return ResolveInterface<T>("", std::forward<TArgs>(args) ...);
@@ -200,6 +220,24 @@ namespace mabiphmo::ioc_container{
         {
             T::Register(shared_from_this());
         }
+
+/*		template <class T, FixedString id = "">
+		struct Injection{
+			explicit Injection(std::shared_ptr<Container> container) : value(container->ResolveInterface<T, id>()) {}
+			std::shared_ptr<T> value;
+		};
+
+		template<class T>
+		struct MultipleInjection{
+			explicit MultipleInjection(std::shared_ptr<Container> container) : value(container->ResolveAll<T>()) {}
+			std::vector<std::shared_ptr<T>> value;
+		};
+
+		template <class T>
+		struct Dependency{
+			explicit Dependency(std::shared_ptr<Container> container) : value(container->Resolve<T>()) {}
+			std::shared_ptr<T> value;
+		};*/
 //region Resolving
 		/// Resolves all available (parameterless) linked implementations of T (which has to be an interface)
 		/// \tparam T The Interface to resolve
@@ -407,6 +445,14 @@ namespace mabiphmo::ioc_container{
 
 			//add the link
 			AddLink<TInterface, T, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
+		}
+
+		/// Registers TInterface to be resolvable by resolving via T
+		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
+		template <class TInterface, class T, FixedString id, typename ... TRemainingArgs, typename ... TArgs>
+		void RegisterOnInterface(TArgs &&... args)
+		{
+			RegisterOnInterface<TInterface, T, TRemainingArgs ...>((std::string)id, std::forward<TArgs>(args) ...);
 		}
 //endregion
 	};
