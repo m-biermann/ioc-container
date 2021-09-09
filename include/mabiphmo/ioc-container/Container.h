@@ -30,11 +30,11 @@ namespace mabiphmo::ioc_container{
 	template<unsigned N>
 	struct FixedString {
 		char buf[N + 1]{};
-		constexpr FixedString(char const* s) {
+		constexpr FixedString(char const* s) { // NOLINT(google-explicit-constructor)
 			for (unsigned i = 0; i != N; ++i) buf[i] = s[i];
 		}
-		constexpr operator char const*() const { return buf; }
-		operator std::string() const { return buf; }
+		constexpr operator char const*() const { return buf; } // NOLINT(google-explicit-constructor)
+		operator std::string() const { return buf; } // NOLINT(google-explicit-constructor)
 	};
 	template<unsigned N> FixedString(char const (&)[N]) -> FixedString<N - 1>;
 
@@ -68,35 +68,72 @@ namespace mabiphmo::ioc_container{
 			/// There will (cannot) be any instances of this, however instances of linked types will be resolved
 			Interface
 		};
+	public:
+		template <class T, FixedString id = "">
+		struct Injection{
+			explicit Injection(std::shared_ptr<Container> container) : value(container->ResolveInterface<T, id>()) {}
+			std::shared_ptr<T> value;
+		};
+
+		template <class T>
+		struct InjectionRuntimeResolved{
+			InjectionRuntimeResolved(std::shared_ptr<Container> container, std::string id) : value(container->ResolveInterface<T>(id)) {}
+			std::shared_ptr<T> value;
+		};
+
+		template<class T>
+		struct MultipleInjection{
+			explicit MultipleInjection(std::shared_ptr<Container> container) : value(container->ResolveAll<T>()) {}
+			std::vector<std::shared_ptr<T>> value;
+		};
+
+		template <class T>
+		struct Dependency{
+			explicit Dependency(std::shared_ptr<Container> container) : value(container->Resolve<T>()) {}
+			std::shared_ptr<T> value;
+		};
+
+	private:
 //endregion
 //region Functions
 //region AddFactory Helpers
+
 		template <typename... Ts>
 		struct list {};
 
-		template <typename L, typename T, typename F, typename = void>
+		template <typename, typename, typename, typename, typename>
 		struct partition;
 
-		template <typename Head, typename... Tail, typename MultipleDependencyList, typename DependencyList>
-		struct partition<list<Head, Tail...>, MultipleDependencyList, DependencyList, list<>> :
-				partition<list<>, MultipleDependencyList, DependencyList, list<Head, Tail...>>
+		template <typename Head, typename... Tail, typename DependencyList, typename RuntimeDependencyList, typename RuntimeDependencyStringList>
+		struct partition<list<Head, Tail...>, DependencyList, RuntimeDependencyList, RuntimeDependencyStringList, list<>> :
+				partition<list<>, DependencyList, RuntimeDependencyList, RuntimeDependencyStringList, list<Head, Tail...>>
 		{};
 
-		template <typename Head, typename... Tail, typename... Ts, typename MultipleDependencyList>
-		struct partition<list<std::shared_ptr<Head>, Tail...>, MultipleDependencyList, list<Ts...>, list<>> :
-				partition<list<Tail...>, MultipleDependencyList, list<Ts..., Head>, list<>>
+		template <typename Head, typename ... Tail, typename DependencyList, typename ... RuntimeDependencies, typename ... RuntimeDependencyStrings>
+		struct partition<list<InjectionRuntimeResolved<Head>, Tail...>, DependencyList, list<RuntimeDependencies...>, list<RuntimeDependencyStrings...>, list<>> :
+				partition<list<Tail...>, DependencyList, list<RuntimeDependencies..., InjectionRuntimeResolved<Head>>, list<RuntimeDependencyStrings..., std::string>, list<>>
 		{};
 
-		template <typename Head, typename... Tail, typename... Ts>
-		struct partition<list<std::vector<std::shared_ptr<Head>>, Tail...>, list<Ts...>, list<>, list<>> :
-				partition<list<Tail...>, list<Ts..., Head>, list<>, list<>>
+		template <typename Head, FixedString HeadId, typename... Tail, typename... Dependencies>
+		struct partition<list<Injection<Head, HeadId>, Tail...>, list<Dependencies...>, list<>, list<>, list<>> :
+				partition<list<Tail...>, list<Dependencies..., Injection<Head, HeadId>>, list<>, list<>, list<>>
 		{};
 
-		template <typename MultipleDependencyList, typename DependencyList, typename ArgsList>
-		struct partition<list<>, MultipleDependencyList, DependencyList, ArgsList> { using type [[maybe_unused]] = list<MultipleDependencyList, DependencyList, ArgsList>; };
+		template <typename Head, typename... Tail, typename... Dependencies>
+		struct partition<list<MultipleInjection<Head>, Tail...>, list<Dependencies...>, list<>, list<>, list<>> :
+				partition<list<Tail...>, list<Dependencies..., MultipleInjection<Head>>, list<>, list<>, list<>>
+		{};
+
+		template <typename Head, typename... Tail, typename... Dependencies>
+		struct partition<list<Dependency<Head>, Tail...>, list<Dependencies...>, list<>, list<>, list<>> :
+				partition<list<Tail...>, list<Dependencies..., Dependency<Head>>, list<>, list<>, list<>>
+		{};
+
+		template <typename DependencyList, typename RuntimeDependencyList, typename RuntimeDependencyStringList, typename ArgsList>
+		struct partition<list<>, DependencyList, RuntimeDependencyList, RuntimeDependencyStringList, ArgsList> { using type [[maybe_unused]] = list<DependencyList, RuntimeDependencyList, RuntimeDependencyStringList, ArgsList>; };
 
 		template <typename... Ts>
-		using register_traits = typename partition<list<Ts...>, list<>, list<>, list<>>::type;
+		using register_traits = typename partition<list<Ts...>, list<>, list<>, list<>, list<>>::type;
 
 		/// Adds the factory after matching dependencies and creating a new factory based on that
 		/// \tparam T Type that the factory creates
@@ -105,8 +142,8 @@ namespace mabiphmo::ioc_container{
 		/// \tparam TDependencies Other dependencies
 		/// \tparam TArgs Arguments that should be supplied when resolving
 		/// \param pFactory Factory method
-		template <typename T, typename F, typename... TMultipleDependencies, typename... TDependencies, typename... TArgs>
-		void AddFactoryImpl(list<list<TMultipleDependencies...>, list<TDependencies...>, list<TArgs...>>, F && pFactory)
+		template <typename T, typename F, typename... TDependencies, typename ... RuntimeDependencies, typename ... RuntimeDependencyStrings, typename... TArgs>
+		void AddFactoryImpl(list<list<TDependencies...>, list<RuntimeDependencies...>, list<RuntimeDependencyStrings...>, list<TArgs...>>, F && pFactory)
 		{
 			if (container_contains(registeredInstances_, typeid(T))){
 				auto ss = std::ostringstream();
@@ -114,15 +151,15 @@ namespace mabiphmo::ioc_container{
 				throw ContainerException(ss.str());
 			}
 
-			auto new_factory = std::make_shared<std::function<std::shared_ptr<T>(TArgs ...)>>(
-					[self_weak = weak_from_this(), factory = std::make_shared<F>(pFactory)](TArgs &&... args) {
+			auto new_factory = std::make_shared<std::function<std::shared_ptr<T>(RuntimeDependencyStrings &&..., TArgs &&...)>>(
+					[self_weak = weak_from_this(), factory = std::make_shared<F>(pFactory)](RuntimeDependencyStrings &&...dependencyStrings, TArgs &&... args) {
 						if(auto self = self_weak.lock())
-							return (*factory)(std::move(self->ResolveAll<TMultipleDependencies>()) ..., self->Resolve<TDependencies>() ..., std::forward<TArgs>(args) ...);
+							return (*factory)(TDependencies(self) ..., RuntimeDependencies(self, std::forward<RuntimeDependencyStrings>(dependencyStrings)) ..., std::forward<TArgs>(args) ...);
 						throw ContainerException("Container is expired");
 					});
 
 			//add the factory
-			registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}] = new_factory;
+			registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(RuntimeDependencyStrings) ..., typeid(TArgs) ...}] = new_factory;
 		}
 //endregion
 		/// Needed for dependency matching; see <b>AddFactoryImpl</b>
@@ -139,9 +176,9 @@ namespace mabiphmo::ioc_container{
 		/// \tparam T The type to link to
 		/// \tparam TInterface The Interface to link
 		/// \tparam TArgs Arguments that should be supplied when resolving
-		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
-		void AddLink(std::string interfaceId, TArgs &&... args) { // NOLINT(performance-unnecessary-value-param)
-			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][interfaceId].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][interfaceId].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TRemainingArgs &&...)>>(
+		template <class TInterface, class T, FixedString id, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLink(TArgs &&... args) {
+			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][id].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][id].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TRemainingArgs &&...)>>(
 					[self_weak = weak_from_this(), args = std::tuple<TArgs ...>(std::forward<TArgs>(args) ...)](TRemainingArgs &&... remainingArgs){
 						return std::apply(
 								[self_weak](TArgs &&...args, TRemainingArgs &&...remainingArgs)
@@ -153,21 +190,6 @@ namespace mabiphmo::ioc_container{
 					}));
 		}
 
-//region AddLink aliases
-		template <class TInterface, class T, FixedString id, typename ... TRemainingArgs, typename ... TArgs>
-		void AddLink(TArgs &&... args) {
-			return AddLink<TInterface, T, TRemainingArgs ...>(id, std::forward<TArgs>(args) ...);
-		}
-
-		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
-		void AddLink(TArgs &&... args) {
-			return AddLink<TInterface, T, TRemainingArgs ...>("", std::forward<TArgs>(args) ...);
-		}
-		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
-		void AddLink(const char *id, TArgs &&... args) {
-			return AddLink<TInterface, T, TRemainingArgs ...>(std::string(id), std::forward<TArgs>(args) ...);
-		}
-//endregion
 		template <class T, typename ... TArgs>
 		std::shared_ptr<T> ResolveInterface(std::string interfaceId, TArgs &&... args){ // NOLINT(performance-unnecessary-value-param)
 			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()){
@@ -188,57 +210,12 @@ namespace mabiphmo::ioc_container{
 			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][interfaceId].front()))(std::forward<TArgs>(args) ...);
 		}
 //region ResolveInterface Aliases
-		template <class T, FixedString id, typename ... TArgs>
+		template <class T, FixedString id = "", typename ... TArgs>
 		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
-			return ResolveInterface<T>(id, std::forward<TArgs>(args) ...);
-		}
-		template <class T, typename ... TArgs>
-		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
-			return ResolveInterface<T>("", std::forward<TArgs>(args) ...);
-		}
-		template <class T, typename ... TArgs>
-		std::shared_ptr<T> ResolveInterface(const char *id, TArgs &&... args){
-			return ResolveInterface<T>(std::string(id), std::forward<TArgs>(args) ...);
+			return ResolveInterface<T>((std::string)id, std::forward<TArgs>(args) ...);
 		}
 //endregion
 //endregion
-//endregion
-        std::unordered_map<std::type_index, Scope> registeredTypes_;
-        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
-        std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
-        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::unordered_map<std::string, std::vector<std::shared_ptr<void>>>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
-
-	public:
-        /// Default constructor
-        Container() = default;
-
-        /// \brief Registers a type as defined in T::Register
-        /// \details The T::Register function should be like <b><tt>void Register(std::shared_ptr<Container> &)</tt></b>
-        /// \tparam T Type to register
-        template <class T>
-        void Register()
-        {
-            T::Register(shared_from_this());
-        }
-
-/*		template <class T, FixedString id = "">
-		struct Injection{
-			explicit Injection(std::shared_ptr<Container> container) : value(container->ResolveInterface<T, id>()) {}
-			std::shared_ptr<T> value;
-		};
-
-		template<class T>
-		struct MultipleInjection{
-			explicit MultipleInjection(std::shared_ptr<Container> container) : value(container->ResolveAll<T>()) {}
-			std::vector<std::shared_ptr<T>> value;
-		};
-
-		template <class T>
-		struct Dependency{
-			explicit Dependency(std::shared_ptr<Container> container) : value(container->Resolve<T>()) {}
-			std::shared_ptr<T> value;
-		};*/
-//region Resolving
 		/// Resolves all available (parameterless) linked implementations of T (which has to be an interface)
 		/// \tparam T The Interface to resolve
 		/// \return All linked implementations of T
@@ -269,6 +246,25 @@ namespace mabiphmo::ioc_container{
 			}
 			return res;
 		}
+//endregion
+        std::unordered_map<std::type_index, Scope> registeredTypes_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::shared_ptr<void>, container_hash<std::vector<std::type_index>>>> registeredFactories_;
+        std::unordered_map<std::type_index, std::shared_ptr<void>> registeredInstances_;
+        std::unordered_map<std::type_index, std::unordered_map<std::vector<std::type_index>, std::unordered_map<std::string, std::vector<std::shared_ptr<void>>>, container_hash<std::vector<std::type_index>>>> registeredLinks_;
+
+	public:
+        /// Default constructor
+        Container() = default;
+
+        /// \brief Registers a type as defined in T::Register
+        /// \details The T::Register function should be like <b><tt>void Register(std::shared_ptr<Container> &)</tt></b>
+        /// \tparam T Type to register
+        template <class T>
+        void Register()
+        {
+            T::Register(shared_from_this());
+        }
+//region Resolving
 
 		/// Resolves the type T with the supplied arguments
 		/// \tparam T The type to resolve
@@ -422,7 +418,7 @@ namespace mabiphmo::ioc_container{
 //region Interface
 		/// Registers TInterface to be resolvable by resolving via T
 		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
-		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		template <class TInterface, class T, FixedString id = "", typename ... TRemainingArgs, typename ... TArgs>
 		void RegisterOnInterface(TArgs &&... args)
 		{
 			static_assert(std::is_base_of<TInterface, T>::value, "T should be derived from the interface");
@@ -432,7 +428,7 @@ namespace mabiphmo::ioc_container{
 				//mark the type as registered as factory
 				registeredTypes_[typeid(TInterface)] = Scope::Interface;
 				//add the link
-				AddLink<TInterface, T, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
+				AddLink<TInterface, T, id, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
 				return;
 			}
 
@@ -444,15 +440,7 @@ namespace mabiphmo::ioc_container{
 			}
 
 			//add the link
-			AddLink<TInterface, T, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
-		}
-
-		/// Registers TInterface to be resolvable by resolving via T
-		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
-		template <class TInterface, class T, FixedString id, typename ... TRemainingArgs, typename ... TArgs>
-		void RegisterOnInterface(TArgs &&... args)
-		{
-			RegisterOnInterface<TInterface, T, TRemainingArgs ...>((std::string)id, std::forward<TArgs>(args) ...);
+			AddLink<TInterface, T, id, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
 		}
 //endregion
 	};

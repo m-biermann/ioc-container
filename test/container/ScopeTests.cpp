@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_SUITE(Scopes)
 	{
 		auto uut = std::make_shared<Container>();
 		uut->RegisterSingleton(std::function<std::shared_ptr<CImpl>(unsigned)>([](unsigned val){return std::make_shared<CImpl>(val);}));
-		uut->RegisterOnInterface<IC, CImpl, unsigned>();
+		uut->RegisterOnInterface<IC, CImpl, "", unsigned>();
 		auto inst = uut->Get<IC>(5u);
 		BOOST_TEST(inst->C() == 5u);
 	}
