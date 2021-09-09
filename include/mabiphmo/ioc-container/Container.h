@@ -54,24 +54,28 @@ namespace mabiphmo::ioc_container{
 		struct Injection{
 			explicit Injection(std::shared_ptr<Container> container) : value(container->ResolveInterface<T, id>()) {}
 			std::shared_ptr<T> value;
+			operator const std::shared_ptr<T> &() {return value;}
 		};
 
 		template <class T>
 		struct InjectionRuntimeResolved{
 			InjectionRuntimeResolved(std::shared_ptr<Container> container, std::string id) : value(container->ResolveInterface<T>(id)) {}
 			std::shared_ptr<T> value;
+			operator const std::shared_ptr<T> &() {return value;}
 		};
 
 		template<class T>
 		struct MultipleInjection{
 			explicit MultipleInjection(std::shared_ptr<Container> container) : value(container->ResolveAll<T>()) {}
 			std::vector<std::shared_ptr<T>> value;
+			operator const std::vector<std::shared_ptr<T>> &() {return value;}
 		};
 
 		template <class T>
 		struct Dependency{
 			explicit Dependency(std::shared_ptr<Container> container) : value(container->Resolve<T>()) {}
 			std::shared_ptr<T> value;
+			operator const std::shared_ptr<T> &() {return value;}
 		};
 //endregion
 //region private
@@ -447,7 +451,7 @@ namespace mabiphmo::ioc_container{
 						}
 						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
 					case Scope::Interface:
-						return ResolveInterface<T>(std::forward<TArgs>(args) ...);
+						return ResolveInterface<T, "">(std::forward<TArgs>(args) ...);
 					default:{
 						auto ss = std::ostringstream();
 						ss << "Type " << boost::typeindex::type_id<T>().pretty_name() << " is registered with an invalid Scope";
