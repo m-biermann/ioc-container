@@ -35,10 +35,12 @@ BOOST_AUTO_TEST_SUITE(Dependency)
 	BOOST_AUTO_TEST_CASE(InjectionWithId)
 	{
 		auto uut = std::make_shared<Container>();
-		uut->RegisterFactory(std::function([](unsigned val){return std::make_shared<CImpl>(val);}));
+		uut->RegisterTransient(std::function([](unsigned val) { return std::make_shared<CImpl>(val); }));
 		uut->RegisterOnInterface<IC, CImpl, "5">(5u);
 		uut->RegisterOnInterface<IC, CImpl, "3">(3u);
-		uut->RegisterFactory(std::function([](Container::InjectionRuntimeResolved<IC> c) {return std::make_shared<D>(std::make_shared<B>(std::make_shared<A>(3), 4), c.value, 8);}));
+		uut->RegisterTransient(std::function([](Container::InjectionRuntimeResolved<IC> c) {
+			return std::make_shared<D>(std::make_shared<B>(std::make_shared<A>(3), 4), c.value, 8);
+		}));
 		auto inst = uut->Resolve<D>(std::string("5"));
 		BOOST_TEST(inst->sum == 20u);
 		BOOST_TEST(inst->c->C() == 5u);

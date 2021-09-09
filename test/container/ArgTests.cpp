@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_SUITE(Args)
 		auto uut = std::make_shared<Container>();
 		auto arg = 3u;
 		uut->RegisterSingleton(std::make_shared<lvalueArgs>(arg));
-		auto inst = uut->Get<lvalueArgs>();
+		auto inst = uut->Resolve<lvalueArgs>();
 		BOOST_TEST(inst->a == 3u);
 		BOOST_TEST(&inst->a != &arg);
 	}
@@ -27,7 +27,7 @@ BOOST_AUTO_TEST_SUITE(Args)
 		auto uut = std::make_shared<Container>();
 		auto arg = 3u;
 		uut->RegisterSingleton(std::make_shared<lvalueRefArgs>(arg));
-		auto inst = uut->Get<lvalueRefArgs>();
+		auto inst = uut->Resolve<lvalueRefArgs>();
 		BOOST_TEST(inst->a == 3u);
 		BOOST_TEST(&inst->a == &arg);
 	}
@@ -37,7 +37,7 @@ BOOST_AUTO_TEST_SUITE(Args)
 		auto uut = std::make_shared<Container>();
 		auto arg = 3u;
 		uut->RegisterSingleton(std::make_shared<lvalueConstRefArgs>(arg));
-		auto inst = uut->Get<lvalueConstRefArgs>();
+		auto inst = uut->Resolve<lvalueConstRefArgs>();
 		BOOST_TEST(inst->a == 3u);
 		BOOST_TEST(&inst->a == &arg);
 	}
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_SUITE(Args)
 	{
 		auto uut = std::make_shared<Container>();
 		uut->RegisterSingleton(std::make_shared<rvalueRefArgs>(3));
-		auto inst = uut->Get<rvalueRefArgs>();
+		auto inst = uut->Resolve<rvalueRefArgs>();
 		BOOST_TEST(inst->a == 3u);
 	}
 
