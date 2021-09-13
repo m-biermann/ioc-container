@@ -54,28 +54,28 @@ namespace mabiphmo::ioc_container{
 		struct Injection{
 			explicit Injection(std::shared_ptr<Container> container) : value(container->ResolveInterface<T, id>()) {}
 			std::shared_ptr<T> value;
-			operator const std::shared_ptr<T> &() {return value;}
+			operator const std::shared_ptr<T> &() {return value;} // NOLINT(google-explicit-constructor)
 		};
 
 		template <class T>
 		struct InjectionRuntimeResolved{
-			InjectionRuntimeResolved(std::shared_ptr<Container> container, std::string id) : value(container->ResolveInterface<T>(id)) {}
+			InjectionRuntimeResolved(std::shared_ptr<Container> container, std::string id) : value(container->ResolveInterfaceRuntimeId<T>(id)) {}
 			std::shared_ptr<T> value;
-			operator const std::shared_ptr<T> &() {return value;}
+			operator const std::shared_ptr<T> &() {return value;} // NOLINT(google-explicit-constructor)
 		};
 
 		template<class T>
 		struct MultipleInjection{
 			explicit MultipleInjection(std::shared_ptr<Container> container) : value(container->ResolveAll<T>()) {}
 			std::vector<std::shared_ptr<T>> value;
-			operator const std::vector<std::shared_ptr<T>> &() {return value;}
+			operator const std::vector<std::shared_ptr<T>> &() {return value;} // NOLINT(google-explicit-constructor)
 		};
 
 		template <class T>
 		struct Dependency{
 			explicit Dependency(std::shared_ptr<Container> container) : value(container->Resolve<T>()) {}
 			std::shared_ptr<T> value;
-			operator const std::shared_ptr<T> &() {return value;}
+			operator const std::shared_ptr<T> &() {return value;} // NOLINT(google-explicit-constructor)
 		};
 //endregion
 //region private
@@ -207,11 +207,29 @@ namespace mabiphmo::ioc_container{
 								}, std::tuple_cat(args, std::tuple<TRemainingArgs ...>(std::forward<TRemainingArgs>(remainingArgs) ...)));
 					}));
 		}
+
+		/// Adds a link between TInterface and T
+		/// \tparam T The type to link to
+		/// \tparam TInterface The Interface to link
+		/// \tparam TArgs Arguments that should be supplied when resolving
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void AddLinkRuntimeId(const std::string& id, TArgs &&... args) {
+			registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][id].insert(registeredLinks_[typeid(TInterface)][std::vector<std::type_index>{typeid(TRemainingArgs) ...}][id].cbegin(), std::make_shared<std::function<std::shared_ptr<TInterface>(TRemainingArgs &&...)>>(
+					[self_weak = weak_from_this(), args = std::tuple<TArgs ...>(std::forward<TArgs>(args) ...)](TRemainingArgs &&... remainingArgs){
+						return std::apply(
+								[self_weak](TArgs &&...args, TRemainingArgs &&...remainingArgs)
+								{
+									if (auto self = self_weak.lock())
+										return std::dynamic_pointer_cast<TInterface>(self->Resolve<T>(std::forward<TArgs>(args) ..., std::forward<TRemainingArgs>(remainingArgs)...));
+									throw ContainerException("Container is expired");
+								}, std::tuple_cat(args, std::tuple<TRemainingArgs ...>(std::forward<TRemainingArgs>(remainingArgs) ...)));
+					}));
+		}
 //endregion
 //region Resolveing
 //region ResolveInterface
 		template <class T, typename ... TArgs>
-		std::shared_ptr<T> ResolveInterface(std::string interfaceId, TArgs &&... args){ // NOLINT(performance-unnecessary-value-param)
+		std::shared_ptr<T> ResolveInterfaceRuntimeId(std::string id, TArgs &&... args){ // NOLINT(performance-unnecessary-value-param)
 			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()){
 				auto ss = std::ostringstream();
 				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no associated, linked types";
@@ -222,16 +240,31 @@ namespace mabiphmo::ioc_container{
 				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied arguments";
 				throw ContainerException(ss.str());
 			}
-			if(!container_contains(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}], interfaceId)){
+			if(!container_contains(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}], id)){
 				auto ss = std::ostringstream();
 				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied id";
 				throw ContainerException(ss.str());
 			}
-			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][interfaceId].front()))(std::forward<TArgs>(args) ...);
+			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][id].front()))(std::forward<TArgs>(args) ...);
 		}
 		template <class T, FixedString id = "", typename ... TArgs>
 		std::shared_ptr<T> ResolveInterface(TArgs &&... args){
-			return ResolveInterface<T>((std::string)id, std::forward<TArgs>(args) ...);
+			if(!container_contains(registeredLinks_, typeid(T)) || registeredLinks_[typeid(T)].empty()){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no associated, linked types";
+				throw ContainerException(ss.str());
+			}
+			if(!container_contains(registeredLinks_[typeid(T)], std::vector<std::type_index>{typeid(TArgs) ...}) || registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}].empty()){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied arguments";
+				throw ContainerException(ss.str());
+			}
+			if(!container_contains(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}], id)){
+				auto ss = std::ostringstream();
+				ss << "Interface " << boost::typeindex::type_id<T>().pretty_name() << " has no link with the supplied id";
+				throw ContainerException(ss.str());
+			}
+			return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredLinks_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}][id].front()))(std::forward<TArgs>(args) ...);
 		}
 //endregion
 //region All
@@ -277,12 +310,12 @@ namespace mabiphmo::ioc_container{
 //region Registering
 //region T::Register
         /// \brief Registers a type as defined in T::Register
-        /// \details The T::Register function should be like <b><tt>void Register(std::shared_ptr<Container> &)</tt></b>
+        /// \details The T::Register function should be like <b><tt>void Register(std::weak_ptr<Container> &)</tt></b>
         /// \tparam T Type to register
         template <class T>
         void Register()
         {
-            T::Register(shared_from_this());
+            T::Register(weak_from_this());
         }
 //endregion
 //region Singleton
@@ -319,10 +352,11 @@ namespace mabiphmo::ioc_container{
 		}
 //endregion
 //region Factory
-		/// Registers a type as Singleton with a factory
+		/// @brief Registers a type as Singleton with a factory
+		/// @details The factory will only be called once - after that resolving won't be dependent on the arguments anymore and the singleton instance will be returned
 		/// \tparam T Type to register
 		/// \tparam TArgs Arguments the factory takes (dependencies will be resolved according to these args)
-		/// \param pFactory Transient method
+		/// \param pFactory Factory method
 		template <class T, typename... TArgs>
 		void RegisterSingleton(std::function<std::shared_ptr<T>(TArgs ...)> && pFactory)
 		{
@@ -348,10 +382,10 @@ namespace mabiphmo::ioc_container{
 //endregion
 //endregion
 //region Transient
-		/// Registers a type as non- Singleton with a factory
+		/// Registers a type as Transient (new instances will be created each time it is resolved) with a factory
 		/// \tparam T Type to register
 		/// \tparam TArgs Arguments the factory takes (dependencies will be resolved according to these args)
-		/// \param pFactory Transient method
+		/// \param pFactory Factory method
 		template <class T, typename... TArgs>
 		void RegisterTransient(std::function<std::shared_ptr<T>(TArgs ...)> && pFactory)
 		{
@@ -377,7 +411,12 @@ namespace mabiphmo::ioc_container{
 //endregion
 //region Interface
 		/// Registers TInterface to be resolvable by resolving via T
+		/// \tparam TInterface The interface to register on
+		/// \tparam T The type to be registered
+		/// \tparam id Id the interface will be resolvable as
 		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
+		/// \tparam TArgs Type of the args to be defined for the interface when resolving the instance
+		/// \param args Args to be defined for the interface when resolving the instance
 		template <class TInterface, class T, FixedString id = "", typename ... TRemainingArgs, typename ... TArgs>
 		void RegisterOnInterface(TArgs &&... args)
 		{
@@ -401,6 +440,38 @@ namespace mabiphmo::ioc_container{
 
 			//add the link
 			AddLink<TInterface, T, id, TRemainingArgs ...>(std::forward<TArgs>(args) ...);
+		}
+
+		/// Registers TInterface to be resolvable by resolving via T
+		/// \tparam TInterface The interface to register on
+		/// \tparam T The type to be registered
+		/// \tparam TRemainingArgs The arguments that can be supplied when resolving TInterface
+		/// \tparam TArgs Type of the args to be defined for the interface when resolving the instance
+		/// \param id Id the interface will be resolvable as
+		/// \param args Args to be defined for the interface when resolving the instance
+		template <class TInterface, class T, typename ... TRemainingArgs, typename ... TArgs>
+		void RegisterOnInterfaceRuntimeId(std::string id, TArgs &&... args)
+		{
+			static_assert(std::is_base_of<TInterface, T>::value, "T should be derived from the interface");
+
+			//check whether the type is registered
+			if (!container_contains(registeredTypes_, typeid(TInterface))){
+				//mark the type as registered as factory
+				registeredTypes_[typeid(TInterface)] = Scope::Interface;
+				//add the link
+				AddLinkRuntimeId<TInterface, T, TRemainingArgs ...>(id, std::forward<TArgs>(args) ...);
+				return;
+			}
+
+			//assertions for a registered type
+			if (registeredTypes_[typeid(TInterface)] != Scope::Interface){
+				auto ss = std::ostringstream();
+				ss << "Type " << boost::typeindex::type_id<T>().pretty_name() << " is already registered as non - Interface";
+				throw ContainerException(ss.str());
+			}
+
+			//add the link
+			AddLinkRuntimeId<TInterface, T, TRemainingArgs ...>(id, std::forward<TArgs>(args) ...);
 		}
 //endregion
 //endregion
@@ -451,7 +522,7 @@ namespace mabiphmo::ioc_container{
 						}
 						return (*std::static_pointer_cast<std::function<std::shared_ptr<T>(TArgs...)>>(registeredFactories_[typeid(T)][std::vector<std::type_index>{typeid(TArgs) ...}]))(std::forward<TArgs>(args) ...);
 					case Scope::Interface:
-						return ResolveInterface<T, "">(std::forward<TArgs>(args) ...);
+						return ResolveInterface<T>(std::forward<TArgs>(args) ...);
 					default:{
 						auto ss = std::ostringstream();
 						ss << "Type " << boost::typeindex::type_id<T>().pretty_name() << " is registered with an invalid Scope";
